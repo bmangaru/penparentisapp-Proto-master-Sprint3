@@ -22,4 +22,4 @@ export const LINKS = {
 // holds the token (see supabase/functions/eventbrite-events). Paste that
 // function's URL here once it's deployed. Left empty, the app shows the
 // built-in list in eventsService.js.
-export const EVENTS_API_URL = '';
+  export const EVENTS_API_URL = 'https://roxegmihuoezgfhrkesr.supabase.co/functions/v1/eventbrite-events';
