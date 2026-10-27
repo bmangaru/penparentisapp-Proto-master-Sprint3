@@ -8,6 +8,8 @@
 // A writing prompt (from Brainstorm's "Write with this", or "Stuck? Try a
 // prompt" on an empty page) sits above the page. It's never part of the text,
 // so it never counts toward your words, and it's saved with the session.
+// The ✦ button in the top bar shows one any time; after 45 seconds without
+// typing, a gentle "Stuck?" card offers one too (it goes away when you type).
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -36,11 +38,16 @@ export default function BrainstormWriterScreen({ navigation, route }) {
 
   const [text, setText] = useState('');
   const [seconds, setSeconds] = useState(0);
+  const secondsRef = useRef(0);
+  secondsRef.current = seconds;
   const [effortWords, setEffortWords] = useState(0); // counts words you later deleted
   const [blockedPastes, setBlockedPastes] = useState(0);
   const [notice, setNotice] = useState('');
   const [paused, setPaused] = useState(false);
   const [prompt, setPrompt] = useState(route?.params?.prompt || null);
+  // Stopwatch second of the last keystroke, for the "Stuck?" nudge.
+  const lastTypedAt = useRef(0);
+  const [nudgeOff, setNudgeOff] = useState(false); // × on the nudge: no more nudges this session
 
   const [dailyGoal, setDailyGoal] = useState(null);
   const [earlierToday, setEarlierToday] = useState({ words: 0, seconds: 0, count: 0 });
@@ -111,6 +118,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     }
     textRef.current = t;
     setText(t);
+    lastTypedAt.current = secondsRef.current;
     const words = countWords(t);
     if (words > highestThisEntry.current) {
       const delta = words - highestThisEntry.current;
@@ -126,6 +134,12 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     count: earlierToday.count + 1, // this session counts toward the sessions ring
   };
   const pct = dailyPct(dailyGoal, todayTotals);
+  const STUCK_AFTER = 45; // seconds without typing
+  const showNudge = ready && !prompt && !nudgeOff && !paused && !sheet && seconds - lastTypedAt.current >= STUCK_AFTER;
+
+  function showPrompt() {
+    setPrompt((p) => p || promptForDay(session.day));
+  }
   // Goal status (exceeded / met / some / none). Not shown as a rating any more;
   // it only colours the weekly chart and the day bubble's progress bar.
   const appRating = appRatingFor(pct);
@@ -207,6 +221,15 @@ export default function BrainstormWriterScreen({ navigation, route }) {
               <Text style={[s.statText, pct >= 100 && s.statGold]}>{pct}% of today</Text>
             </>
           )}
+          <Pressable
+            onPress={() => (prompt ? setPrompt(nextPrompt(prompt)) : showPrompt())}
+            hitSlop={8}
+            style={s.sparkBtn}
+            accessibilityRole="button"
+            accessibilityLabel={prompt ? 'Another prompt' : 'Show a writing prompt'}
+          >
+            <Text style={s.sparkText}>✦</Text>
+          </Pressable>
           <Pressable onPress={() => setPaused((p) => !p)} hitSlop={8} style={s.pauseBtn}>
             <Text style={s.pauseText}>{paused ? 'Resume' : 'Pause'}</Text>
           </Pressable>
@@ -258,6 +281,22 @@ export default function BrainstormWriterScreen({ navigation, route }) {
         <View style={s.editor} />
       )}
 
+      {showNudge ? (
+        <View style={s.nudge}>
+          <Text style={s.nudgeIcon}>✦</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.nudgeTitle}>Stuck?</Text>
+            <Text style={s.nudgeSub}>Try a prompt to keep going</Text>
+          </View>
+          <Pressable onPress={showPrompt} style={s.nudgeBtn} accessibilityRole="button">
+            <Text style={s.nudgeBtnText}>Show me one</Text>
+          </Pressable>
+          <Pressable onPress={() => setNudgeOff(true)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Not now">
+            <Text style={s.nudgeX}>×</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={[s.bottomBar, { paddingBottom: insets.bottom + 14 }]}>
         <Pressable style={s.finishBtn} onPress={finish}>
           <Text style={s.finishText}>Finish &amp; check in</Text>
@@ -289,6 +328,18 @@ const s = StyleSheet.create({
   statText: { fontSize: 13, fontWeight: '600', color: colors.muted },
   statGold: { color: colors.karma },
   dotSep: { color: colors.muted },
+  sparkBtn: { marginLeft: 4, width: 30, height: 26, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.karmaLight, backgroundColor: '#FFF8E6', alignItems: 'center', justifyContent: 'center' },
+  sparkText: { fontSize: 13, fontWeight: '800', color: '#8A5E12' },
+  nudge: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: space.lg, marginBottom: 10,
+    backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: colors.karmaLight, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12,
+  },
+  nudgeIcon: { fontSize: 18, color: '#8A5E12' },
+  nudgeTitle: { fontSize: 13.5, fontWeight: '700', color: colors.ink },
+  nudgeSub: { fontSize: 11.5, color: colors.muted },
+  nudgeBtn: { backgroundColor: colors.royal, borderRadius: radius.sm, paddingVertical: 8, paddingHorizontal: 10, minHeight: 36, justifyContent: 'center' },
+  nudgeBtnText: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
+  nudgeX: { fontSize: 20, color: colors.muted, paddingHorizontal: 2 },
   pauseBtn: { marginLeft: 4, paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.cream },
   pauseText: { fontSize: 12, fontWeight: '700', color: colors.royalDeep },
   notice: { marginHorizontal: space.lg, marginBottom: 6, backgroundColor: colors.cream, borderRadius: radius.sm, padding: 10 },

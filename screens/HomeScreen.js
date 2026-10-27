@@ -5,10 +5,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Screen, Header, Button, openLink } from '../components/ui';
 import Sheet from '../components/Sheet';
 import DonorCrawl from '../components/DonorCrawl';
+import EventCountdown from '../components/EventCountdown';
+import PromptCard from '../components/PromptCard';
 import { colors, lift, radius, space } from '../theme';
 import { LINKS } from '../links';
 import { buildInsights, describeDailyGoal, formatDuration, TIER_DEEP } from '../writingLogic';
 import { loadAll, useToday } from '../writingStore';
+import { loadEvents, upcoming } from '../eventsService';
+import { useAttending } from '../eventActions';
 
 // US 5: three networks named in the backlog, plus two we already had links
 // for. Named ones are listed first since those are the ones called out.
@@ -23,17 +27,23 @@ export default function HomeScreen({ navigation }) {
   const [socialsOpen, setSocialsOpen] = useState(false);
   const today = useToday();
   const [insights, setInsights] = useState(null);
+  const [events, setEvents] = useState([]);
+  const attending = useAttending();
 
   // Rebuilt every time Home comes into view, so the message reflects the
   // current time of day and whatever was just written.
   useFocusEffect(
     useCallback(() => {
       loadAll().then(({ goals, sessions, dailyGoals }) => setInsights(buildInsights(sessions, dailyGoals, new Date(), goals)));
+      loadEvents().then((r) => setEvents(upcoming(r.events)));
     }, [today])
   );
 
   const goWrite = () => navigation.navigate('Brainstorm', { screen: 'BrainstormWriter' });
   const goBrainstorm = () => navigation.navigate('Brainstorm', { screen: 'BrainstormHome' });
+  const writeWithPrompt = (prompt) => navigation.navigate('Brainstorm', { screen: 'BrainstormWriter', params: { prompt }, initial: false });
+  // Opens that event on the Events tab (scrolls to it and opens its card).
+  const openEvent = (e) => navigation.navigate('Events', { openEventId: e.id, at: Date.now() });
 
   return (
     <Screen>
@@ -80,15 +90,13 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-        <View style={[s.live, lift]}>
-          <View style={s.dot} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.liveTitle}>Next salon, 7pm ET</Text>
-            <Text style={s.liveSub}>Three writers · register free on Eventbrite</Text>
-          </View>
-          <Pressable style={s.pill} onPress={() => navigation.navigate('Salons')}>
-            <Text style={s.pillText}>Details</Text>
-          </Pressable>
+        {/* The event you're going to (countdown), or the next one with "I'm going". */}
+        <View style={s.block}>
+          <EventCountdown events={events} attending={attending} onDetails={openEvent} />
+        </View>
+
+        <View style={s.block}>
+          <PromptCard onWrite={writeWithPrompt} />
         </View>
 
         <Button label="Socials" variant="outline" onPress={() => setSocialsOpen(true)} />
@@ -147,13 +155,7 @@ const s = StyleSheet.create({
   todaySub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   track: { height: 6, borderRadius: 999, backgroundColor: colors.cream, marginTop: 8, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999, backgroundColor: colors.royal },
-  live: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: colors.cream, borderRadius: radius.md, padding: 14, marginBottom: space.md,
-  },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.karma },
-  liveTitle: { fontWeight: '700', fontSize: 13.5, color: colors.ink },
-  liveSub: { fontSize: 12, color: colors.muted },
+  block: { marginBottom: space.md },
   pill: { backgroundColor: colors.royal, borderRadius: radius.pill, paddingVertical: 9, paddingHorizontal: 14 },
   pillText: { color: '#fff', fontSize: 12.5, fontWeight: '600' },
   karma: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.md, padding: 16, marginTop: space.xs },
