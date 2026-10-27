@@ -19,7 +19,7 @@ import { AppState, Share } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { allMedalProgress, diffMedals } from './medals';
 import { feelingLabel } from './feelings';
-import { dayKey, dayShareText, formatDuration, msUntilMidnight, normalizeGoals, parseDayKey, upgradeOldGoals } from './writingLogic';
+import { dayKey, dayShareText, timeText, msUntilMidnight, normalizeGoals, parseDayKey, upgradeOldGoals } from './writingLogic';
 
 export const GOALS_KEY = 'pp.goals.v2'; // usual goals: three rings (+ optional lighter day)
 export const DAILY_GOALS_KEY = 'pp.dailyGoals.v1';
@@ -144,7 +144,7 @@ export function shareDays(summaries, title = 'My writing — Pen Parentis') {
 export function shareWriting(session, title = 'My writing — Pen Parentis') {
   const when = parseDayKey(session.day).toDateString();
   const rating = session.feeling ? ` · felt ${feelingLabel(session.feeling).toLowerCase()}` : '';
-  const message = `${when} · ${session.finalWords ?? session.words} words · ${formatDuration(session.seconds)}${rating}\n\n${session.text || ''}`;
+  const message = `${when} · ${session.finalWords ?? session.words} words · ${timeText(session.seconds)}${rating}\n\n${session.text || ''}`;
   return Share.share({ title, message }).catch(() => {});
 }
 

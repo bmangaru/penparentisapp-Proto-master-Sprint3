@@ -6,7 +6,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Rings from './Rings';
 import { colors, lift } from '../theme';
-import { formatDuration } from '../writingLogic';
+import { timeClock, timeLabel } from '../writingLogic';
 
 export default function WeekRings({ week, onPressDay }) {
   const { days, done, closedDays } = week;
@@ -38,18 +38,18 @@ export default function WeekRings({ week, onPressDay }) {
       <View style={s.rule} />
       <View style={s.totals}>
         <Total n={done.words.toLocaleString()} label={done.words === 1 ? 'word' : 'words'} />
-        <Total n={formatDuration(done.seconds)} label="writing" divider />
+        <Total n={timeClock(done.seconds)} label="writing" unit={`(${timeLabel(done.seconds)})`} divider />
         <Total n={String(done.count)} label={done.count === 1 ? 'session' : 'sessions'} divider />
       </View>
     </View>
   );
 }
 
-function Total({ n, label, divider }) {
+function Total({ n, label, unit, divider }) {
   return (
     <View style={[s.totalBox, divider && s.divider]}>
       <Text style={s.totalN} numberOfLines={1}>{n}</Text>
-      <Text style={s.totalL}>{label}</Text>
+      <Text style={s.totalL}>{label}{unit ? <Text style={s.totalU}> {unit}</Text> : null}</Text>
     </View>
   );
 }
@@ -69,6 +69,7 @@ const s = StyleSheet.create({
   totalBox: { flex: 1, alignItems: 'center' },
   divider: { borderLeftWidth: 1, borderLeftColor: colors.line },
   totalN: { fontSize: 17, fontWeight: '800', color: colors.ink },
+  totalU: { fontSize: 10.5, color: '#8A93AE' },
   totalL: { fontSize: 11.5, color: colors.muted, marginTop: 1 },
 });
 

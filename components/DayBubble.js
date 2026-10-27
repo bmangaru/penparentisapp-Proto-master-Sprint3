@@ -6,7 +6,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { colors, lift, radius } from '../theme';
 import Face from './Face';
-import { formatDuration, parseDayKey } from '../writingLogic';
+import { parseDayKey, timeText } from '../writingLogic';
 import { feelingLabel } from '../feelings';
 
 // Progress-bar colour from goal status (gold once the goal is exceeded).
@@ -53,7 +53,7 @@ export default function DayBubble({ day, isToday, onPress }) {
       </View>
 
       <Text style={s.stats}>
-        {plural(day.words, 'word')} · {formatDuration(day.seconds)} · {plural(day.count, 'check-in')}
+        {plural(day.words, 'word')} · {timeText(day.seconds)} · {plural(day.count, 'session')}
       </Text>
 
       {barPct != null && (

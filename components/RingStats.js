@@ -10,7 +10,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, AccessibilityInfo } from 'react-native';
 import Rings, { RING_COLORS } from './Rings';
-import { formatDuration, overMultiple } from '../writingLogic';
+import { overMultiple, timeClock } from '../writingLogic';
 
 export const FILL_MS = 2500;
 const STAGGER = { minutes: [0, 1250], words: [450, 1450], sessions: [900, 1600] }; // [start, length] ms — done at 2.5 s
@@ -94,7 +94,7 @@ export default function RingStats({ summary, rings, playKey, off = false, size =
       <View style={s.lines}>
         <Line
           name="MINUTES" color={c.minutes}
-          value={formatDuration(Math.round(summary.seconds * fm))}
+          value={timeClock(Math.round(summary.seconds * fm))}
           of={tg.minutes ? `${tg.minutes} min` : null} pct={grow(rings.minutes, fm)} noGoal={noGoal}
         />
         <Line

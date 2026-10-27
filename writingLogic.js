@@ -72,6 +72,29 @@ export function greetingFor(h) {
 // 5-second session never reads as "0 min" and 75 minutes reads "1 hr 15 min".
 // ---------------------------------------------------------------------------
 
+// Time you've written, shown the same way everywhere in the app:
+//   timeClock: "0:45", "8:25", "1:08:25"      (just the numbers)
+//   timeUnit:  "min" under an hour, else "h"   (what the numbers mean)
+//   timeText:  "8:25 min", "1:08:25 h"          (numbers + unit, for sentences)
+//   timeLabel: "min:sec" or "h:min:sec"         (for a label under a big number)
+export function timeClock(totalSeconds) {
+  const t = Math.max(0, Math.floor(totalSeconds || 0));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const ss = String(t % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+export function timeUnit(totalSeconds) {
+  return (totalSeconds || 0) >= 3600 ? 'h' : 'min';
+}
+export function timeText(totalSeconds) {
+  return `${timeClock(totalSeconds)} ${timeUnit(totalSeconds)}`;
+}
+export function timeLabel(totalSeconds) {
+  return (totalSeconds || 0) >= 3600 ? 'h:min:sec' : 'min:sec';
+}
+
+// Goal amounts in words ("45 min", "2 hr"), used for medal targets.
 export function formatDuration(totalSeconds) {
   const t = Math.max(0, Math.round(totalSeconds || 0));
   if (t < 60) return `${t} sec`;
@@ -467,7 +490,7 @@ export function dayShareText(summary) {
   const date = parseDayKey(summary.key).toDateString();
   const goalBit = summary.goal && !summary.goal.skipped ? ` · goal ${describeDailyGoal(summary.goal)}` : '';
   const ratingBit = summary.feeling ? ` · felt ${feelingLabel(summary.feeling).toLowerCase()}` : '';
-  const head = `${date} · ${summary.words.toLocaleString()} words · ${formatDuration(summary.seconds)}${goalBit}${ratingBit}`;
+  const head = `${date} · ${summary.words.toLocaleString()} words · ${timeText(summary.seconds)}${goalBit}${ratingBit}`;
   const body = summary.pieces.map((p) => p.text.trim()).filter(Boolean).join('\n\n— — —\n\n');
   return `${head}\n\n${body}`;
 }

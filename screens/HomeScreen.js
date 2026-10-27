@@ -9,7 +9,7 @@ import EventCountdown from '../components/EventCountdown';
 import PromptCard from '../components/PromptCard';
 import { colors, lift, radius, space } from '../theme';
 import { LINKS } from '../links';
-import { buildInsights, describeDailyGoal, formatDuration, TIER_DEEP } from '../writingLogic';
+import { buildInsights, describeDailyGoal, timeText, TIER_DEEP } from '../writingLogic';
 import { loadAll, useToday } from '../writingStore';
 import { loadEvents, upcoming } from '../eventsService';
 import { useAttending } from '../eventActions';
@@ -76,7 +76,7 @@ export default function HomeScreen({ navigation }) {
               <Text style={s.todaySub}>
                 {insights.todayPct != null
                   ? `${insights.todayPct}% done · ${insights.todaySum.words.toLocaleString()} words`
-                  : `${insights.todaySum.words.toLocaleString()} words · ${formatDuration(insights.todaySum.seconds)} so far`}
+                  : `${insights.todaySum.words.toLocaleString()} words · ${timeText(insights.todaySum.seconds)} so far`}
               </Text>
               {insights.todayPct != null && (
                 <View style={s.track}>

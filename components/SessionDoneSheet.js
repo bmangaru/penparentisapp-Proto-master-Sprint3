@@ -12,7 +12,7 @@ import Medal from './Medal';
 import { colors, radius, space } from '../theme';
 import { FEELINGS, feelingLabel } from '../feelings';
 import Rings from './Rings';
-import { formatDuration, isRestGoal, ringProgress, toGoText } from '../writingLogic';
+import { isRestGoal, ringProgress, timeClock, timeText, toGoText } from '../writingLogic';
 import { TIER_LABEL, formatAmount } from '../medals';
 
 function goalLine(goal, totals, pct) {
@@ -21,20 +21,20 @@ function goalLine(goal, totals, pct) {
     const r = ringProgress(goal, totals);
     const t = r.targets;
     return {
-      title: `Today: ${totals.words.toLocaleString()} of ${t.words.toLocaleString()} words · ${formatDuration(totals.seconds)} of ${t.minutes} min · ${totals.count} of ${t.sessions} session${t.sessions === 1 ? '' : 's'}`,
+      title: `Today: ${totals.words.toLocaleString()} of ${t.words.toLocaleString()} words · ${timeClock(totals.seconds)} of ${t.minutes} min · ${totals.count} of ${t.sessions} session${t.sessions === 1 ? '' : 's'}`,
       right: r.closed ? 'All rings closed' : `${toGoText(goal, totals)} to go`,
       pct,
       rings: r,
     };
   }
   if (!goal || isRestGoal(goal) || pct == null) {
-    return { title: `Today: ${totals.words.toLocaleString()} words · ${formatDuration(totals.seconds)}`, right: null, pct: null };
+    return { title: `Today: ${totals.words.toLocaleString()} words · ${timeText(totals.seconds)}`, right: null, pct: null };
   }
   if (goal.type === 'time') {
     const left = goal.target * 60 - totals.seconds;
     return {
-      title: `Today: ${formatDuration(totals.seconds)} of ${goal.target} min`,
-      right: pct >= 100 ? 'Goal met' : `${formatDuration(left)} to go`,
+      title: `Today: ${timeClock(totals.seconds)} of ${goal.target} min`,
+      right: pct >= 100 ? 'Goal met' : `${timeText(left)} to go`,
       pct,
     };
   }
@@ -59,7 +59,7 @@ export default function SessionDoneSheet({
       visible={visible}
       onClose={onDone}
       title="Session saved"
-      subtitle={`${words.toLocaleString()} word${words === 1 ? '' : 's'} · ${formatDuration(seconds)} · in My Writing`}
+      subtitle={`${words.toLocaleString()} word${words === 1 ? '' : 's'} · ${timeText(seconds)} · in My Writing`}
     >
       <View style={s.goal}>
         <View style={s.goalHead}>

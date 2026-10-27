@@ -21,7 +21,7 @@ import { LINKS } from '../links';
 import { eventWhen, eventsByDay, loadEvents, upcoming } from '../eventsService';
 import { addEventToCalendar, openPhoneSettings, setAttending, shareEvent, useAttending } from '../eventActions';
 import {
-  DEFAULT_GOALS, calendarDay, calendarWeeks, describeDailyGoal, formatDuration, parseDayKey,
+  DEFAULT_GOALS, calendarDay, calendarWeeks, describeDailyGoal, parseDayKey, timeText,
 } from '../writingLogic';
 import { loadAll, useDataChange, useToday } from '../writingStore';
 
@@ -304,7 +304,7 @@ export default function EventsScreen({ navigation, route }) {
               {sel.future
                 ? sel.off ? 'Day off' : `Plan: ${describeDailyGoal(sel.goal)}`
                 : sel.count
-                  ? `${sel.words.toLocaleString()} words · ${formatDuration(sel.seconds)} · ${sel.count} session${sel.count === 1 ? '' : 's'}${sel.rings.closed ? ' · all rings closed' : ''}`
+                  ? `${sel.words.toLocaleString()} words · ${timeText(sel.seconds)} · ${sel.count} session${sel.count === 1 ? '' : 's'}${sel.rings.closed ? ' · all rings closed' : ''}`
                   : sel.off ? 'Day off' : 'No writing this day'}
             </Text>
             {selEvents.map((e) => (

@@ -8,15 +8,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Rings from './Rings';
 import { colors, radius, space } from '../theme';
-import { ringProgress } from '../writingLogic';
-
-function clockText(sec) {
-  const s = Math.max(0, Math.floor(sec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const r = String(s % 60).padStart(2, '0');
-  return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
-}
+import { ringProgress, timeClock } from '../writingLogic';
 
 function Cell({ name, color, value, goal, pct }) {
   const done = pct != null && pct >= 100;
@@ -40,7 +32,7 @@ export default function LiveRings({ goal, totals }) {
     <View style={s.card} accessibilityRole="summary">
       <Rings minutes={r.minutes} words={r.words} sessions={r.sessions} size={44} />
       <View style={s.cells}>
-        <Cell name="MIN" color="#B07A1C" value={clockText(totals.seconds)} goal={t.minutes ? `${t.minutes} min` : null} pct={r.minutes} />
+        <Cell name="MIN" color="#B07A1C" value={timeClock(totals.seconds)} goal={t.minutes ? `${t.minutes} min` : null} pct={r.minutes} />
         <Cell name="WORDS" color={colors.royal} value={totals.words.toLocaleString()} goal={t.words ? t.words.toLocaleString() : null} pct={r.words} />
         <Cell name="SESSIONS" color="#3C8BBF" value={String(totals.count)} goal={t.sessions || null} pct={r.sessions} />
       </View>
