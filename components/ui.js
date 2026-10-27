@@ -19,7 +19,8 @@ export function Screen({ children, scrollRef }) {
   );
 }
 
-export function Header({ title, subtitle, children }) {
+// `right`: optional small buttons shown in the title row.
+export function Header({ title, subtitle, right, children }) {
   const insets = useSafeAreaInsets();
   return (
     <LinearGradient
@@ -35,7 +36,14 @@ export function Header({ title, subtitle, children }) {
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      <Text style={s.headerTitle}>{title}</Text>
+      {right ? (
+        <View style={s.titleRow}>
+          <Text style={[s.headerTitle, { flex: 1 }]}>{title}</Text>
+          {right}
+        </View>
+      ) : (
+        <Text style={s.headerTitle}>{title}</Text>
+      )}
       {subtitle ? <Text style={s.headerSub}>{subtitle}</Text> : null}
       {children}
     </LinearGradient>
@@ -72,6 +80,7 @@ export function openLink(url) {
 const s = StyleSheet.create({
   header: { paddingHorizontal: space.lg, paddingBottom: space.lg, overflow: 'hidden' },
   headerTitle: { color: '#FFFFFF', fontSize: 26, fontWeight: '700', letterSpacing: -0.2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 12.5, marginTop: 4 },
   card: { backgroundColor: '#FFFFFF', borderRadius: radius.md, padding: space.md, marginBottom: space.sm, borderWidth: 1, borderColor: colors.line },
   btnWrap: { borderRadius: radius.md, marginBottom: space.sm },

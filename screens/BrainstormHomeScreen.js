@@ -11,7 +11,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { Screen, Header } from '../components/ui';
+import { Screen } from '../components/ui';
 import RingStats from '../components/RingStats';
 import WeekRings from '../components/WeekRings';
 import GoalsSheet from '../components/GoalsSheet';
@@ -25,7 +25,7 @@ import {
   sessionsOnDay, startButtonState, summarize, weekDayKeys, weekSummary,
 } from '../writingLogic';
 import { loadAll, saveDailyGoal, saveGoals, syncMedals, useToday } from '../writingStore';
-import PromptCard from '../components/PromptCard';
+import PromptHeader from '../components/PromptHeader';
 
 export default function BrainstormHomeScreen({ navigation }) {
   const today = useToday();
@@ -33,6 +33,7 @@ export default function BrainstormHomeScreen({ navigation }) {
 
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [planMode, setPlanMode] = useState('daily'); // 'daily' pop-up or 'edit' from the Today card
   const dismissedFor = useRef(null);
   // Bumped every time Brainstorm comes into view, so the Today rings fill again.
   const [playKey, setPlayKey] = useState(null);
@@ -55,7 +56,7 @@ export default function BrainstormHomeScreen({ navigation }) {
   // First run → set goals once. After that, ask "What's your goal today?" once a day.
   function maybePrompt(d) {
     if (!d.hasGoals) setGoalsOpen(true);
-    else if (!d.dailyGoals[today] && dismissedFor.current !== today) setPlanOpen(true);
+    else if (!d.dailyGoals[today] && dismissedFor.current !== today) { setPlanMode('daily'); setPlanOpen(true); }
   }
 
   // Reload whenever this screen regains focus (e.g. back from the typer), and
@@ -98,6 +99,7 @@ export default function BrainstormHomeScreen({ navigation }) {
   function onStartPress() {
     if (button.state === 'setGoal') {
       startAfterPlan.current = true;
+      setPlanMode('daily');
       setPlanOpen(true);
     } else {
       navigation.navigate('BrainstormWriter');
@@ -124,20 +126,19 @@ export default function BrainstormHomeScreen({ navigation }) {
 
   return (
     <Screen>
-      <Header title="Brainstorm" subtitle="Small goals, kept quietly" />
+      {/* Header: today's prompt with ✎ Write, ↻ another, ✕ hide. */}
+      <PromptHeader title="Brainstorm" onWrite={(prompt) => navigation.navigate('BrainstormWriter', { prompt })} />
       <View style={s.pad}>
         {/* Today: the three rings */}
         <LinearGradient colors={gradients.header} style={[s.today, lift]}>
           <View style={s.todayHead}>
             <Text style={s.todayLabel}>Today · {todayLabel}{rest ? ' · rest day' : ''}</Text>
-            <Pressable onPress={() => setPlanOpen(true)} hitSlop={8}>
-              <Text style={s.todayLink}>{rest ? 'Plan today' : 'Change today'}</Text>
+            {/* One link: today's goal and your usual goals, in one sheet. */}
+            <Pressable onPress={() => { setPlanMode('edit'); setPlanOpen(true); }} hitSlop={8} accessibilityRole="button">
+              <Text style={s.todayLink}>Edit goals</Text>
             </Pressable>
           </View>
           <RingStats summary={todaySum} rings={rings} off={rest} playKey={playKey} />
-          <Pressable onPress={() => setGoalsOpen(true)} style={s.editGoals}>
-            <Text style={s.editGoalsText}>Edit goals</Text>
-          </Pressable>
         </LinearGradient>
 
         {/* Start writing — label and action change with the day */}
@@ -147,9 +148,6 @@ export default function BrainstormHomeScreen({ navigation }) {
             <Text style={[s.startSub, button.state === 'met' && { color: '#3D2A05' }]}>{button.sub}</Text>
           </LinearGradient>
         </Pressable>
-
-        {/* Today's prompt (same card as Home) */}
-        <PromptCard onWrite={(prompt) => navigation.navigate('BrainstormWriter', { prompt })} />
 
         {/* This week: seven ring sets */}
         <WeekRings
@@ -194,6 +192,7 @@ export default function BrainstormHomeScreen({ navigation }) {
         today={today}
         current={dailyGoals[today]}
         onPick={onPickPlan}
+        mode={planMode}
         onEditGoals={() => { setPlanOpen(false); setTimeout(() => setGoalsOpen(true), 300); }}
         onClose={closePlan}
       />
@@ -215,8 +214,6 @@ const s = StyleSheet.create({
   todayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   todayLabel: { fontSize: 12.5, fontWeight: '700', color: 'rgba(255,255,255,0.88)' },
   todayLink: { fontSize: 12.5, fontWeight: '700', color: colors.cream, textDecorationLine: 'underline' },
-  editGoals: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
-  editGoalsText: { color: colors.cream, fontSize: 12.5, fontWeight: '700', textDecorationLine: 'underline' },
   startWrap: { borderRadius: radius.md },
   start: { borderRadius: radius.md, paddingVertical: 13, paddingHorizontal: 16, alignItems: 'center', gap: 3 },
   startTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
