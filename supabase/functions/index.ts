@@ -33,22 +33,44 @@ function trim(e: any) {
   };
 }
 
+// Eventbrite rejects some option combinations on this endpoint, so try a few,
+// simplest last, and use the first that works.
+const ATTEMPTS = [
+  "status=live&order_by=start_asc&expand=venue",
+  "order_by=start_asc&expand=venue",
+  "expand=venue",
+  "",
+];
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   const token = Deno.env.get("EVENTBRITE_TOKEN");
   if (!token) return Response.json({ error: "EVENTBRITE_TOKEN not set" }, { status: 500, headers: CORS });
 
-  const url = `${API}?status=live&order_by=start_asc&expand=venue&page_size=50`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) {
-    return Response.json({ error: `Eventbrite ${res.status}` }, { status: 502, headers: CORS });
+  const errors: unknown[] = [];
+  for (const query of ATTEMPTS) {
+    const res = await fetch(`${API}${query ? `?${query}` : ""}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      // Keep Eventbrite's own explanation so problems are easy to read.
+      let detail: unknown = null;
+      try { detail = await res.json(); } catch { /* not JSON */ }
+      errors.push({ query, status: res.status, detail });
+      continue;
+    }
+    const body = await res.json();
+    const now = Date.now();
+    const events = (body.events ?? [])
+      .map(trim)
+      .filter((e: { start?: string; end?: string }) => e.start && new Date(e.end ?? e.start).getTime() >= now)
+      .sort((a: { start: string }, b: { start: string }) => a.start.localeCompare(b.start));
+    return Response.json(
+      { events },
+      { headers: { ...CORS, "Cache-Control": "public, max-age=900" } }, // 15 min
+    );
   }
-  const body = await res.json();
-  const events = (body.events ?? []).map(trim).filter((e: { start?: string }) => e.start);
-
-  return Response.json(
-    { events },
-    { headers: { ...CORS, "Cache-Control": "public, max-age=900" } }, // 15 min
-  );
+  return Response.json({ error: "Eventbrite refused every request", errors }, { status: 502, headers: CORS });
+  // @ts-nocheck
 });
