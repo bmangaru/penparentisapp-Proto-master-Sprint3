@@ -7,9 +7,9 @@ import React from 'react';
 import Svg, { Circle, G } from 'react-native-svg';
 
 export const RING_COLORS = {
-  light: { minutes: '#C8912B', words: '#1B3FA0', sessions: '#5FA8D3', trackOpacity: 0.18 },
+  light: { minutes: '#C8912B', words: '#1B3FA0', sessions: '#5FA8D3', trackOpacity: 0.2 },
   // On the dark blue Today card.
-  dark: { minutes: '#E0AE45', words: '#FFFFFF', sessions: '#8CCBF0', trackOpacity: 0.25 },
+  dark: { minutes: '#F2C14E', words: '#FFFFFF', sessions: '#9AD8FF', trackOpacity: 0.3 },
 };
 
 const RADII = { minutes: 19, words: 14, sessions: 9 };

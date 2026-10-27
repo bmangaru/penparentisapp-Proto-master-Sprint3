@@ -12,7 +12,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen, Header } from '../components/ui';
-import Rings from '../components/Rings';
+import Rings, { RING_COLORS } from '../components/Rings';
 import WeekRings from '../components/WeekRings';
 import GoalsSheet from '../components/GoalsSheet';
 import TodayPlanSheet from '../components/TodayPlanSheet';
@@ -133,18 +133,18 @@ export default function BrainstormHomeScreen({ navigation }) {
             <Rings minutes={rings.minutes} words={rings.words} sessions={rings.sessions} off={rest && !todaySum.count} size={112} variant="dark" />
             <View style={{ flex: 1, gap: 8 }}>
               <View>
-                <Text style={[s.ringName, { color: '#E0AE45' }]}>MINUTES</Text>
-                <Text style={s.ringValue}>{formatDuration(todaySum.seconds)}<Text style={s.ringOf}>{t?.minutes ? ` of ${t.minutes}` : ''}</Text></Text>
+                <Text style={[s.ringName, { color: RING_COLORS.dark.minutes }]}>MINUTES</Text>
+                <Text style={s.ringValue}>{formatDuration(todaySum.seconds)}<Text style={s.ringOf}>{t?.minutes ? ` of ${t.minutes} min` : ''}{rings.minutes >= 100 ? '  ✓' : ''}</Text></Text>
               </View>
               <View>
-                <Text style={[s.ringName, { color: '#FFFFFF' }]}>WORDS</Text>
-                <Text style={s.ringValue}>{todaySum.words.toLocaleString()}<Text style={s.ringOf}>{line(todaySum.words, t?.words)}</Text></Text>
+                <Text style={[s.ringName, { color: RING_COLORS.dark.words }]}>WORDS</Text>
+                <Text style={s.ringValue}>{todaySum.words.toLocaleString()}<Text style={s.ringOf}>{line(todaySum.words, t?.words)}{rings.words >= 100 ? '  ✓' : ''}</Text></Text>
               </View>
               <View>
-                <Text style={[s.ringName, { color: '#8CCBF0' }]}>SESSIONS</Text>
+                <Text style={[s.ringName, { color: RING_COLORS.dark.sessions }]}>SESSIONS</Text>
                 <Text style={s.ringValue}>
                   {todaySum.count}
-                  <Text style={s.ringOf}>{line(todaySum.count, t?.sessions)}{rings.sessions >= 100 ? ' · closed' : ''}</Text>
+                  <Text style={s.ringOf}>{line(todaySum.count, t?.sessions)}{rings.sessions >= 100 ? '  ✓' : ''}</Text>
                 </Text>
               </View>
             </View>

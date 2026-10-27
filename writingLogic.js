@@ -237,7 +237,18 @@ export function isRestGoal(goal) {
 // goals on a writing day, else a day off (null).
 export function goalForDay(dailyGoals, goals, key) {
   const stored = dailyGoals?.[key];
-  if (stored) return stored;
+  if (stored) {
+    // A one-ring goal saved by the old goal sheet (e.g. "50 words") for today
+    // or later: keep that target and fill the other rings from your usual
+    // goals, so all three rings have something to close. Past days keep
+    // the goal they were judged by.
+    if (goals && !stored.plan && !stored.skipped && stored.type && stored.target && key >= dayKey()) {
+      const usual = planFor('usual', goals);
+      if (stored.type === 'time') return { ...usual, minutes: stored.target, upgraded: true };
+      if (stored.type === 'word') return { ...usual, words: stored.target, upgraded: true };
+    }
+    return stored;
+  }
   if (goals && isWritingDay(goals, key)) return { ...planFor('usual', goals), implied: true };
   return null;
 }
