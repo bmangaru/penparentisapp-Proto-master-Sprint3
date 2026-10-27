@@ -13,13 +13,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, Pressable, KeyboardAvoidingView, Platform, AppState,
+  View, Text, TextInput, StyleSheet, Pressable, KeyboardAvoidingView, Platform, AppState, Animated, LayoutAnimation,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SessionDoneSheet from '../components/SessionDoneSheet';
+import LiveRings from '../components/LiveRings';
 import { colors, radius, space } from '../theme';
 import {
-  appRatingFor, clock, countWords, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
+  appRatingFor, countWords, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
 } from '../writingLogic';
 import { loadAll, saveSession, shareWriting, syncMedals } from '../writingStore';
 import { nextPrompt, promptForDay } from '../prompts';
@@ -68,6 +69,20 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   // the box. Only words typed beyond it count toward this session.
   const [ready, setReady] = useState(false);
   const [resumedAt, setResumedAt] = useState(null);
+  // "Picking up where you left off": fades out after 4 s, or tap ✕.
+  const [showResume, setShowResume] = useState(true);
+  const resumeFade = useRef(new Animated.Value(1)).current;
+  function hideResume() {
+    Animated.timing(resumeFade, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setShowResume(false);
+    });
+  }
+  useEffect(() => {
+    if (!resumedAt) return undefined;
+    const id = setTimeout(hideResume, 4000);
+    return () => clearTimeout(id);
+  }, [resumedAt]);
   const continues = useRef(false);
 
   useEffect(() => {
@@ -211,39 +226,36 @@ export default function BrainstormWriterScreen({ navigation, route }) {
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
           <Text style={s.close}>×</Text>
         </Pressable>
-        <View style={s.statsInline}>
-          <Text style={s.statText}>{effortWords} words</Text>
-          <Text style={s.dotSep}>·</Text>
-          <Text style={s.statText}>{clock(seconds)}</Text>
-          {pct != null && (
-            <>
-              <Text style={s.dotSep}>·</Text>
-              <Text style={[s.statText, pct >= 100 && s.statGold]}>{pct}% of today</Text>
-            </>
-          )}
+        <View style={s.barRight}>
           <Pressable
             onPress={() => (prompt ? setPrompt(nextPrompt(prompt)) : showPrompt())}
-            hitSlop={8}
-            style={s.sparkBtn}
+            hitSlop={6}
+            style={[s.promptBtn, prompt && s.promptBtnOn]}
             accessibilityRole="button"
             accessibilityLabel={prompt ? 'Another prompt' : 'Show a writing prompt'}
           >
-            <Text style={s.sparkText}>✦</Text>
+            <Text style={[s.promptBtnText, prompt && { color: '#2A1A00' }]}>✦ Prompt</Text>
           </Pressable>
-          <Pressable onPress={() => setPaused((p) => !p)} hitSlop={8} style={s.pauseBtn}>
+          <Pressable onPress={() => setPaused((p) => !p)} hitSlop={8} style={s.pauseBtn} accessibilityRole="button">
             <Text style={s.pauseText}>{paused ? 'Resume' : 'Pause'}</Text>
           </Pressable>
         </View>
       </View>
 
+      {/* Today's rings, live: earlier writing today + this session. */}
+      <LiveRings goal={dailyGoal} totals={todayTotals} />
+
       {notice ? (
         <View style={s.notice}><Text style={s.noticeText}>{notice}</Text></View>
-      ) : resumedAt ? (
-        <View style={s.notice}>
-          <Text style={s.noticeText}>
+      ) : resumedAt && showResume ? (
+        <Animated.View style={[s.notice, s.noticeRow, { opacity: resumeFade }]}>
+          <Text style={[s.noticeText, { flex: 1 }]}>
             Picking up where you left off at {new Date(resumedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
           </Text>
-        </View>
+          <Pressable onPress={hideResume} hitSlop={10} style={s.noticeX} accessibilityRole="button" accessibilityLabel="Close">
+            <Text style={s.noticeXText}>✕</Text>
+          </Pressable>
+        </Animated.View>
       ) : null}
 
       {prompt ? (
@@ -324,12 +336,6 @@ export default function BrainstormWriterScreen({ navigation, route }) {
 const s = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.lg, paddingBottom: 10 },
   close: { fontSize: 28, color: colors.muted, lineHeight: 28 },
-  statsInline: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  statText: { fontSize: 13, fontWeight: '600', color: colors.muted },
-  statGold: { color: colors.karma },
-  dotSep: { color: colors.muted },
-  sparkBtn: { marginLeft: 4, width: 30, height: 26, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.karmaLight, backgroundColor: '#FFF8E6', alignItems: 'center', justifyContent: 'center' },
-  sparkText: { fontSize: 13, fontWeight: '800', color: '#8A5E12' },
   nudge: {
     flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: space.lg, marginBottom: 10,
     backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: colors.karmaLight, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12,
@@ -340,7 +346,17 @@ const s = StyleSheet.create({
   nudgeBtn: { backgroundColor: colors.royal, borderRadius: radius.sm, paddingVertical: 8, paddingHorizontal: 10, minHeight: 36, justifyContent: 'center' },
   nudgeBtnText: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
   nudgeX: { fontSize: 20, color: colors.muted, paddingHorizontal: 2 },
-  pauseBtn: { marginLeft: 4, paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.cream },
+  barRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  promptBtn: {
+    minHeight: 32, paddingHorizontal: 12, borderRadius: radius.pill, justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.karmaLight, backgroundColor: '#FFF8E6',
+  },
+  promptBtnOn: { backgroundColor: colors.karmaLight },
+  promptBtnText: { fontSize: 12.5, fontWeight: '800', color: '#8A5E12' },
+  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  noticeX: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(10,22,51,0.07)' },
+  noticeXText: { fontSize: 13, color: colors.muted, fontWeight: '700' },
+  pauseBtn: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.cream },
   pauseText: { fontSize: 12, fontWeight: '700', color: colors.royalDeep },
   notice: { marginHorizontal: space.lg, marginBottom: 6, backgroundColor: colors.cream, borderRadius: radius.sm, padding: 10 },
   noticeText: { fontSize: 12.5, color: colors.body },
