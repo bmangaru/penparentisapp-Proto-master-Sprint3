@@ -7,7 +7,7 @@
 // Tapping a past day you wrote on opens what you wrote that day.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen, Header, openLink } from '../components/ui';
@@ -32,6 +32,9 @@ export default function EventsScreen({ navigation }) {
   const [events, setEvents] = useState([]);
   const [eventsSource, setEventsSource] = useState(null);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const listFade = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState(today);
   const [openEvent, setOpenEvent] = useState(null);
   const [earlier, setEarlier] = useState(0);
@@ -43,12 +46,24 @@ export default function EventsScreen({ navigation }) {
   useFocusEffect(useCallback(() => { loadAll().then(setData); }, [today]));
   useEffect(() => { setSelected(today); }, [today]);
 
+  // Refresh: the list fades out and clears, "Getting the latest events…"
+  // shows, then whatever the events server returns fades back in. (A short
+  // minimum wait so the reload is visible even on fast Wi-Fi.)
   const refreshEvents = useCallback(async (force = false) => {
     setLoadingEvents(true);
-    const r = await loadEvents({ force });
+    setRefreshFailed(false);
+    if (force) {
+      await new Promise((done) => Animated.timing(listFade, { toValue: 0, duration: 200, useNativeDriver: true }).start(done));
+      setEvents([]);
+    }
+    const [r] = await Promise.all([loadEvents({ force }), new Promise((done) => setTimeout(done, force ? 900 : 0))]);
     setEvents(r.events);
     setEventsSource(r.source);
+    setUpdatedAt(r.updatedAt);
+    setRefreshFailed(force && r.source !== 'live');
     setLoadingEvents(false);
+    listFade.setValue(0);
+    Animated.timing(listFade, { toValue: 1, duration: 450, useNativeDriver: true }).start();
   }, []);
   useEffect(() => { refreshEvents(); }, []);
 
@@ -97,13 +112,26 @@ export default function EventsScreen({ navigation }) {
         {/* ---------- Coming up (top to bottom) ---------- */}
         <View style={s.titleRow}>
           <Text style={s.h}>Coming up</Text>
-          {loadingEvents ? <ActivityIndicator size="small" color={colors.royal} /> : (
-            <Pressable onPress={() => refreshEvents(true)} hitSlop={10} accessibilityLabel="Refresh events">
-              <Ionicons name="refresh" size={17} color={colors.muted} />
-            </Pressable>
-          )}
+          <Pressable
+            onPress={() => refreshEvents(true)}
+            disabled={loadingEvents}
+            style={[s.refresh, loadingEvents && { opacity: 0.45 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh events from Eventbrite"
+          >
+            <Ionicons name="refresh" size={15} color={colors.royal} />
+            <Text style={s.refreshText}>{loadingEvents ? 'Refreshing' : 'Refresh'}</Text>
+          </Pressable>
         </View>
 
+        {loadingEvents && (
+          <View style={[s.card, s.loadingCard]}>
+            <ActivityIndicator size="small" color={colors.royal} />
+            <Text style={s.body}>Getting the latest events from Eventbrite…</Text>
+          </View>
+        )}
+
+        <Animated.View style={{ opacity: listFade, gap: space.md }}>
         {!loadingEvents && coming.length === 0 && (
           <View style={[s.card, lift]}>
             <Text style={s.body}>No events listed right now. New salons are posted on Eventbrite.</Text>
@@ -141,12 +169,20 @@ export default function EventsScreen({ navigation }) {
           </Pressable>
         ))}
 
+        {!loadingEvents && (
+          <Text style={s.note}>
+            {refreshFailed
+              ? "Couldn't reach Eventbrite, so these are the last saved events."
+              : eventsSource === 'built-in'
+                ? 'Showing saved salon dates. Live Eventbrite updates turn on once the events server is set up.'
+                : `Live from Eventbrite${updatedAt ? ` · updated ${new Date(updatedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` : ''}`}
+          </Text>
+        )}
+        </Animated.View>
+
         <Pressable onPress={() => openLink(LINKS.eventbrite)} style={s.allLink}>
           <Text style={s.link}>See all events on Eventbrite  ›</Text>
         </Pressable>
-        {eventsSource === 'built-in' && (
-          <Text style={s.note}>Showing saved salon dates. Live Eventbrite updates turn on once the events server is set up.</Text>
-        )}
 
         {/* ---------- Selected day ---------- */}
         <View style={[s.card, lift, s.dayCard]}>
@@ -293,7 +329,10 @@ const s = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   h: { fontSize: 16, fontWeight: '700', color: colors.ink },
   body: { fontSize: 13, color: colors.body, lineHeight: 18 },
-  note: { fontSize: 11.5, color: colors.muted, textAlign: 'center', marginTop: -6 },
+  note: { fontSize: 11.5, color: colors.muted, textAlign: 'center' },
+  refresh: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: colors.royal, backgroundColor: '#FFFFFF' },
+  refreshText: { fontSize: 12.5, fontWeight: '700', color: colors.royal },
+  loadingCard: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64 },
   card: { backgroundColor: '#FFFFFF', borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, padding: 14 },
 
   next: { backgroundColor: '#FFFFFF', borderRadius: radius.lg, borderWidth: 2, borderColor: colors.karmaLight, padding: 14, gap: 12 },

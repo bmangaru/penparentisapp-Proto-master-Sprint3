@@ -17,24 +17,24 @@ const MAX_AGE_MS = 6 * 60 * 60 * 1000; // refresh at most every 6 hours
 // Used until the server function is live. Update by hand if dates change.
 export const FALLBACK_EVENTS = [
   {
-    id: 'salon-2026-11-10',
-    name: 'Pen Parentis Literary Salon',
-    start: '2026-11-10T19:00:00-05:00',
-    end: '2026-11-10T20:30:00-05:00',
+    id: '1997639471434',
+    name: "BUILDING WRITER-PARENT COMMUNITY: Meet The Author's Guild",
+    start: '2026-11-11T00:00:00Z',
+    end: '2026-11-11T01:15:00Z',
     online: true,
     venue: 'Online',
-    url: LINKS.eventbrite,
-    summary: 'Three writer-parents read new work, then talk craft and family life.',
+    url: 'https://www.eventbrite.com/e/building-writer-parent-community-meet-the-authors-guild-registration-1997639471434',
+    summary: 'How do you succeed if you have kids? Pen Parentis has real life answers - readings and lived experiences of authors - in community!',
   },
   {
-    id: 'salon-2026-12-08',
-    name: 'Pen Parentis Literary Salon',
-    start: '2026-12-08T19:00:00-05:00',
-    end: '2026-12-08T20:30:00-05:00',
+    id: '1997641492479',
+    name: 'BUILDING WRITER-PARENT COMMUNITY: Meet RAWI',
+    start: '2026-12-09T00:00:00Z',
+    end: '2026-12-09T01:15:00Z',
     online: true,
     venue: 'Online',
-    url: LINKS.eventbrite,
-    summary: 'Three writer-parents read new work, then talk craft and family life.',
+    url: 'https://www.eventbrite.com/e/building-writer-parent-community-meet-rawi-registration-1997641492479',
+    summary: 'How do you succeed if you have kids? Pen Parentis has real life answers - readings and lived experiences of authors - in community!',
   },
 ];
 
@@ -75,28 +75,31 @@ async function readCache() {
   }
 }
 
-// Returns { events, source: 'live' | 'saved' | 'built-in' }.
+// Returns { events, source: 'live' | 'saved' | 'built-in', updatedAt (ms or null) }.
 export async function loadEvents({ force = false } = {}) {
   const cached = await readCache();
   const fresh = cached && Date.now() - cached.savedAt < MAX_AGE_MS;
-  if (cached && fresh && !force) return { events: normalizeEvents(cached.events), source: 'saved' };
+  if (cached && fresh && !force) return { events: normalizeEvents(cached.events), source: 'saved', updatedAt: cached.savedAt };
 
   if (EVENTS_API_URL) {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 8000);
-      const res = await fetch(EVENTS_API_URL, { signal: ctrl.signal });
+      // A refresh skips every cache (phone and server) so it's truly live.
+      const url = force ? `${EVENTS_API_URL}${EVENTS_API_URL.includes('?') ? '&' : '?'}t=${Date.now()}` : EVENTS_API_URL;
+      const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store', headers: force ? { 'Cache-Control': 'no-cache' } : {} });
       clearTimeout(timer);
       if (res.ok) {
         const body = await res.json();
         const events = normalizeEvents(body.events || body);
-        await AsyncStorage.setItem(EVENTS_KEY, JSON.stringify({ savedAt: Date.now(), events }));
-        return { events, source: 'live' };
+        const savedAt = Date.now();
+        await AsyncStorage.setItem(EVENTS_KEY, JSON.stringify({ savedAt, events }));
+        return { events, source: 'live', updatedAt: savedAt };
       }
     } catch {
       // offline or server down — fall through
     }
   }
-  if (cached) return { events: normalizeEvents(cached.events), source: 'saved' };
-  return { events: normalizeEvents(FALLBACK_EVENTS), source: 'built-in' };
+  if (cached) return { events: normalizeEvents(cached.events), source: 'saved', updatedAt: cached.savedAt };
+  return { events: normalizeEvents(FALLBACK_EVENTS), source: 'built-in', updatedAt: null };
 }
