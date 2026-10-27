@@ -84,6 +84,9 @@ export default function DayScreen({ navigation, route }) {
                 {p.sessionIds.length > 1 ? `Started ${timeOf(p.firstAt)} · last saved ${timeOf(p.lastAt)}` : `Saved ${timeOf(p.lastAt)}`}
               </Text>
             </View>
+            {p.prompts?.map((pr) => (
+              <Text key={pr} style={s.piecePrompt}>✦ Prompt: “{pr}”</Text>
+            ))}
             <Text style={s.pieceText} selectable>{p.text.trim() || 'Time only — no text saved'}</Text>
             {p.feelings.length > 0 && (
               <View style={s.feelRow}>
@@ -142,6 +145,7 @@ const s = StyleSheet.create({
   feelLabel: { fontSize: 12, color: '#4F5878', marginRight: 2 },
   feelChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DCE4F7', borderRadius: radius.pill, paddingVertical: 3, paddingLeft: 4, paddingRight: 9 },
   feelChipText: { fontSize: 12, fontWeight: '700', color: colors.royalDeep },
+  piecePrompt: { fontSize: 13, lineHeight: 19, color: '#8A5E12', backgroundColor: '#FFF8E6', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
   pieceText: { fontSize: 16, lineHeight: 25, color: colors.ink },
   note: { fontSize: 12.5, lineHeight: 18, color: colors.muted },
   delete: { color: '#B3261E', fontSize: 13, fontWeight: '700', textAlign: 'center', paddingVertical: 14 },

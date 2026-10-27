@@ -19,6 +19,7 @@ import Rings, { RING_COLORS } from '../components/Rings';
 import { colors, lift, radius, space } from '../theme';
 import { LINKS } from '../links';
 import { eventWhen, eventsByDay, loadEvents, upcoming } from '../eventsService';
+import { addEventToCalendar, loadAddedEvents, openPhoneSettings, shareEvent } from '../eventActions';
 import {
   DEFAULT_GOALS, calendarDay, calendarWeeks, describeDailyGoal, formatDuration, parseDayKey,
 } from '../writingLogic';
@@ -53,6 +54,10 @@ export default function EventsScreen({ navigation }) {
   const [selected, setSelected] = useState(today);
   // Which event card is open (null = the next upcoming one).
   const [openId, setOpenId] = useState(null);
+  // Events already put in the phone's calendar, and a short note under the buttons.
+  const [inCalendar, setInCalendar] = useState({});
+  const [calNote, setCalNote] = useState(null); // { id, text, settings? }
+  const noteTimer = useRef(null);
   const scrollRef = useRef(null);
   const padY = useRef(0);
   const listY = useRef(0);
@@ -96,7 +101,21 @@ export default function EventsScreen({ navigation }) {
     listFade.setValue(0);
     Animated.timing(listFade, { toValue: 1, duration: 450, useNativeDriver: true }).start();
   }, []);
-  useEffect(() => { refreshEvents(); }, []);
+  useEffect(() => { refreshEvents(); loadAddedEvents().then(setInCalendar); }, []);
+
+  async function onAddToCalendar(e) {
+    const r = await addEventToCalendar(e);
+    setInCalendar(r.added);
+    const text = {
+      added: 'Added to your calendar · reminder 1 hour before',
+      already: "It's already in your calendar.",
+      denied: 'Calendar access is off for this app.',
+      error: "Couldn't add it to your calendar. Try again in a moment.",
+    }[r.status];
+    clearTimeout(noteTimer.current);
+    setCalNote({ id: e.id, text, settings: r.status === 'denied', ok: r.status === 'added' || r.status === 'already' });
+    noteTimer.current = setTimeout(() => setCalNote(null), 4500);
+  }
 
   // Leaving the app (not just switching tabs) puts the next event back on top.
   useEffect(() => {
@@ -230,6 +249,10 @@ export default function EventsScreen({ navigation }) {
             open={e.id === activeId}
             isNext={i === 0}
             onOpen={() => openEventCard(e.id)}
+            inCalendar={!!inCalendar[e.id]}
+            onAddToCalendar={() => onAddToCalendar(e)}
+            onShare={() => shareEvent(e)}
+            note={calNote?.id === e.id ? calNote : null}
           />
         ))}
 
@@ -345,7 +368,7 @@ export default function EventsScreen({ navigation }) {
 
 // One event. Open: gold border, label, full name, description, Register.
 // Closed: a slim row; tapping it opens it (and folds the other one).
-function EventCard({ event: e, open, isNext, onOpen }) {
+function EventCard({ event: e, open, isNext, onOpen, inCalendar, onAddToCalendar, onShare, note }) {
   const where = e.online ? 'Online' : e.venue;
   if (!open) {
     return (
@@ -376,6 +399,31 @@ function EventCard({ event: e, open, isNext, onOpen }) {
       <Pressable onPress={() => openLink(e.url)} style={s.register} accessibilityRole="link">
         <Text style={s.registerText}>Register on Eventbrite</Text>
       </Pressable>
+      <View style={s.actions}>
+        <Pressable
+          onPress={onAddToCalendar}
+          style={[s.action, inCalendar && s.actionDone]}
+          accessibilityRole="button"
+          accessibilityLabel={inCalendar ? 'In your calendar' : 'Add to calendar'}
+        >
+          <Ionicons name={inCalendar ? 'checkmark' : 'calendar-outline'} size={16} color={inCalendar ? '#1E7B3A' : colors.royal} />
+          <Text style={[s.actionText, inCalendar && { color: '#1E7B3A' }]}>{inCalendar ? 'In your calendar' : 'Add to calendar'}</Text>
+        </Pressable>
+        <Pressable onPress={onShare} style={s.action} accessibilityRole="button" accessibilityLabel="Share this event">
+          <Ionicons name="share-outline" size={16} color={colors.royal} />
+          <Text style={s.actionText}>Share</Text>
+        </Pressable>
+      </View>
+      {note ? (
+        <View style={[s.calNote, note.ok && s.calNoteOk]}>
+          <Text style={[s.calNoteText, note.ok && { color: '#1E5E33' }]}>{note.text}</Text>
+          {note.settings ? (
+            <Pressable onPress={openPhoneSettings} hitSlop={6}>
+              <Text style={s.calNoteLink}>Open Settings</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -481,6 +529,17 @@ const s = StyleSheet.create({
   monthTag: { fontSize: 10, fontWeight: '800', color: '#8A5E12' },
   star: { position: 'absolute', top: -9, right: -11 },
   starIcon: { textShadowColor: 'rgba(138,94,18,0.45)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 } },
+  actions: { flexDirection: 'row', gap: 8, marginTop: -4 },
+  action: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44,
+    borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.royal, backgroundColor: '#FFFFFF',
+  },
+  actionDone: { borderColor: '#1E7B3A', backgroundColor: '#EEF8F1' },
+  actionText: { fontSize: 13, fontWeight: '700', color: colors.royal },
+  calNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, backgroundColor: '#FDECEA', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  calNoteOk: { backgroundColor: '#EEF8F1' },
+  calNoteText: { flex: 1, fontSize: 12.5, color: '#8C1D18' },
+  calNoteLink: { fontSize: 12.5, fontWeight: '700', color: colors.royal },
   backPill: {
     position: 'absolute', alignSelf: 'center', bottom: 10, backgroundColor: colors.royal, borderRadius: 999,
     paddingHorizontal: 14, minHeight: 34, justifyContent: 'center',

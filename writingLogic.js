@@ -379,6 +379,7 @@ export function dayPieces(sessions, key) {
       last.lastAt = s.endedAt || s.startedAt;
       last.rating = finalRating(s) || last.rating;
       last.sessionIds.push(s.id);
+      if (s.prompt && !last.prompts.includes(s.prompt)) last.prompts.push(s.prompt);
       if (s.feeling) last.feelings.push({ at: s.endedAt || s.startedAt, feeling: s.feeling });
     } else {
       pieces.push({
@@ -389,6 +390,7 @@ export function dayPieces(sessions, key) {
         lastAt: s.endedAt || s.startedAt,
         rating: finalRating(s),
         sessionIds: [s.id],
+        prompts: s.prompt ? [s.prompt] : [], // writing prompts used for this piece
         feelings: s.feeling ? [{ at: s.endedAt || s.startedAt, feeling: s.feeling }] : [],
       });
     }

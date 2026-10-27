@@ -5,6 +5,9 @@
 // via "Finish & check in", the ×, or the Android back button. Finishing opens
 // ONE sheet: saved, today's goal, any new medal, and "How do you feel?". Pasting is
 // blocked so the word count only ever reflects words actually typed.
+// A writing prompt (from Brainstorm's "Write with this", or "Stuck? Try a
+// prompt" on an empty page) sits above the page. It's never part of the text,
+// so it never counts toward your words, and it's saved with the session.
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -17,8 +20,9 @@ import {
   appRatingFor, clock, countWords, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
 } from '../writingLogic';
 import { loadAll, saveSession, shareWriting, syncMedals } from '../writingStore';
+import { nextPrompt, promptForDay } from '../prompts';
 
-export default function BrainstormWriterScreen({ navigation }) {
+export default function BrainstormWriterScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
 
   // One session per visit to this screen. Its day is the day it *started*,
@@ -36,6 +40,7 @@ export default function BrainstormWriterScreen({ navigation }) {
   const [blockedPastes, setBlockedPastes] = useState(0);
   const [notice, setNotice] = useState('');
   const [paused, setPaused] = useState(false);
+  const [prompt, setPrompt] = useState(route?.params?.prompt || null);
 
   const [dailyGoal, setDailyGoal] = useState(null);
   const [earlierToday, setEarlierToday] = useState({ words: 0, seconds: 0, count: 0 });
@@ -139,6 +144,7 @@ export default function BrainstormWriterScreen({ navigation }) {
       appRating,
       feeling: null,
       continues: continues.current,
+      prompt: prompt || null,
       ...extra,
     };
   }
@@ -217,6 +223,25 @@ export default function BrainstormWriterScreen({ navigation }) {
         </View>
       ) : null}
 
+      {prompt ? (
+        <View style={s.prompt}>
+          <Text style={s.promptKick}>✦ PROMPT</Text>
+          <Text style={s.promptText}>“{prompt}”</Text>
+          <View style={s.promptLinks}>
+            <Pressable onPress={() => setPrompt(nextPrompt(prompt))} hitSlop={8} accessibilityRole="button">
+              <Text style={s.promptLink}>↻ Another</Text>
+            </Pressable>
+            <Pressable onPress={() => setPrompt(null)} hitSlop={8} accessibilityRole="button">
+              <Text style={[s.promptLink, { color: colors.muted }]}>Hide</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : ready && !text.trim() ? (
+        <Pressable onPress={() => setPrompt(promptForDay(session.day))} style={s.chip} accessibilityRole="button">
+          <Text style={s.chipText}>✦ Stuck? Try a prompt</Text>
+        </Pressable>
+      ) : null}
+
       {ready ? (
         <TextInput
           value={text}
@@ -268,6 +293,16 @@ const s = StyleSheet.create({
   pauseText: { fontSize: 12, fontWeight: '700', color: colors.royalDeep },
   notice: { marginHorizontal: space.lg, marginBottom: 6, backgroundColor: colors.cream, borderRadius: radius.sm, padding: 10 },
   noticeText: { fontSize: 12.5, color: colors.body },
+  prompt: { backgroundColor: '#FFF8E6', borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#EAD9B6', paddingHorizontal: space.lg, paddingVertical: 12, marginBottom: 8 },
+  promptKick: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8, color: '#8A5E12' },
+  promptText: { fontSize: 16, lineHeight: 23, color: colors.ink, marginTop: 4, fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }) },
+  promptLinks: { flexDirection: 'row', gap: 18, marginTop: 8 },
+  promptLink: { fontSize: 13, fontWeight: '700', color: colors.royal, minHeight: 24 },
+  chip: {
+    alignSelf: 'flex-start', marginLeft: space.lg, marginBottom: 8, minHeight: 36, justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.karmaLight, backgroundColor: '#FFF8E6', borderRadius: 999, paddingHorizontal: 12,
+  },
+  chipText: { fontSize: 12.5, fontWeight: '700', color: '#8A5E12' },
   editor: { flex: 1, paddingHorizontal: space.lg, fontSize: 17, lineHeight: 26, color: colors.ink },
   bottomBar: { paddingHorizontal: space.lg, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.line },
   finishBtn: { backgroundColor: colors.royal, borderRadius: radius.md, paddingVertical: 15, alignItems: 'center' },

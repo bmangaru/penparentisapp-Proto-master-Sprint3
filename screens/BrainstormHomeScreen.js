@@ -1,14 +1,14 @@
 // screens/BrainstormHomeScreen.js — the landing screen:
 //   • Today: your three rings (minutes, words, sessions) + "Edit goals"
 //   • a Start writing button that changes with the day
-//   • This week: seven small ring sets, Mon–Sun, and the week's totals
+//   • This week: seven small ring sets, Sun–Sat, and the week's totals
 //   • one white bubble per day of writing this week (tap to read it)
 //   • the Medals card
 // Goals are set in ONE place (GoalsSheet). "What's your goal today?" is asked
 // once a day (TodayPlanSheet) and resets at midnight.
 
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen, Header } from '../components/ui';
@@ -25,6 +25,7 @@ import {
   sessionsOnDay, startButtonState, summarize, weekDayKeys, weekSummary,
 } from '../writingLogic';
 import { loadAll, saveDailyGoal, saveGoals, syncMedals, useToday } from '../writingStore';
+import { nextPrompt, promptForDay } from '../prompts';
 
 export default function BrainstormHomeScreen({ navigation }) {
   const today = useToday();
@@ -33,6 +34,9 @@ export default function BrainstormHomeScreen({ navigation }) {
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const dismissedFor = useRef(null);
+  // Today's prompt: the same all day, new at midnight. "Another" swaps it.
+  const [prompt, setPrompt] = useState(promptForDay(today));
+  useEffect(() => { setPrompt(promptForDay(today)); }, [today]);
   // Bumped every time Brainstorm comes into view, so the Today rings fill again.
   const [playKey, setPlayKey] = useState(null);
   const startAfterPlan = useRef(false);
@@ -147,6 +151,24 @@ export default function BrainstormHomeScreen({ navigation }) {
           </LinearGradient>
         </Pressable>
 
+        {/* Today's prompt */}
+        <View style={[s.prompt, lift]}>
+          <Text style={s.promptKick}>✦ TODAY'S PROMPT</Text>
+          <Text style={s.promptText}>“{prompt}”</Text>
+          <View style={s.promptRow}>
+            <Pressable
+              onPress={() => navigation.navigate('BrainstormWriter', { prompt })}
+              style={[s.promptBtn, s.promptBtnMain]}
+              accessibilityRole="button"
+            >
+              <Text style={[s.promptBtnText, { color: '#FFFFFF' }]}>Write with this</Text>
+            </Pressable>
+            <Pressable onPress={() => setPrompt(nextPrompt(prompt))} style={s.promptBtn} accessibilityRole="button">
+              <Text style={s.promptBtnText}>↻  Another</Text>
+            </Pressable>
+          </View>
+        </View>
+
         {/* This week: seven ring sets */}
         <WeekRings
           week={week}
@@ -214,6 +236,13 @@ const s = StyleSheet.create({
   editGoals: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
   editGoalsText: { color: colors.cream, fontSize: 12.5, fontWeight: '700', textDecorationLine: 'underline' },
   startWrap: { borderRadius: radius.md },
+  prompt: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: colors.karmaLight, borderRadius: radius.lg, padding: 14 },
+  promptKick: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8, color: '#8A5E12' },
+  promptText: { fontSize: 16.5, lineHeight: 24, color: colors.ink, marginTop: 6, marginBottom: 12, fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }) },
+  promptRow: { flexDirection: 'row', gap: 8 },
+  promptBtn: { flex: 1, minHeight: 44, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.royal, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  promptBtnMain: { backgroundColor: colors.royal },
+  promptBtnText: { fontSize: 13.5, fontWeight: '700', color: colors.royal },
   start: { borderRadius: radius.md, paddingVertical: 13, paddingHorizontal: 16, alignItems: 'center', gap: 3 },
   startTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   startSub: { fontSize: 12, color: 'rgba(255,255,255,0.88)', textAlign: 'center' },

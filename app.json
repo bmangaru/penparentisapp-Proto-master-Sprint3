@@ -30,6 +30,14 @@
         "projectId": "b166120f-0481-42c8-9aa7-6f1d33c13f83"
       }
     },
-    "owner": "ronycodedevs-team"
+    "owner": "ronycodedevs-team",
+    "plugins": [
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Pen Parentis adds the events you choose to your calendar, with a reminder."
+        }
+      ]
+    ]
   }
 }
