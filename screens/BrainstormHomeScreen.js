@@ -12,7 +12,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen, Header } from '../components/ui';
-import Rings, { RING_COLORS } from '../components/Rings';
+import RingStats from '../components/RingStats';
 import WeekRings from '../components/WeekRings';
 import GoalsSheet from '../components/GoalsSheet';
 import TodayPlanSheet from '../components/TodayPlanSheet';
@@ -21,7 +21,7 @@ import MedalsCard from '../components/MedalsCard';
 import NewMedalSheet from '../components/NewMedalSheet';
 import { colors, gradients, lift, radius, space } from '../theme';
 import {
-  DEFAULT_GOALS, daySummary, describeDailyGoal, formatDuration, goalForDay, isRestGoal, parseDayKey, ringProgress,
+  DEFAULT_GOALS, daySummary, describeDailyGoal, goalForDay, isRestGoal, parseDayKey, ringProgress,
   sessionsOnDay, startButtonState, summarize, weekDayKeys, weekSummary,
 } from '../writingLogic';
 import { loadAll, saveDailyGoal, saveGoals, syncMedals, useToday } from '../writingStore';
@@ -33,6 +33,8 @@ export default function BrainstormHomeScreen({ navigation }) {
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const dismissedFor = useRef(null);
+  // Bumped every time Brainstorm comes into view, so the Today rings fill again.
+  const [playKey, setPlayKey] = useState(null);
   const startAfterPlan = useRef(false);
 
   // Medals: progress for the card, plus any tier earned since the last check
@@ -59,7 +61,11 @@ export default function BrainstormHomeScreen({ navigation }) {
   // again when the clock passes midnight while it's open (`today` changes).
   useFocusEffect(
     useCallback(() => {
-      reload().then(maybePrompt);
+      // Start the fill once today's numbers are loaded.
+      reload().then((d) => {
+        setPlayKey((n) => n + 1);
+        maybePrompt(d);
+      });
     }, [today])
   );
 
@@ -114,8 +120,6 @@ export default function BrainstormHomeScreen({ navigation }) {
     .filter((d) => d.count > 0 || d.key !== today);
 
   const todayLabel = parseDayKey(today).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  const t = rings.targets;
-  const line = (done, target) => (target ? ` of ${target.toLocaleString()}` : '');
 
   return (
     <Screen>
@@ -129,26 +133,7 @@ export default function BrainstormHomeScreen({ navigation }) {
               <Text style={s.todayLink}>{rest ? 'Plan today' : 'Change today'}</Text>
             </Pressable>
           </View>
-          <View style={s.todayBody}>
-            <Rings minutes={rings.minutes} words={rings.words} sessions={rings.sessions} off={rest && !todaySum.count} size={112} variant="dark" />
-            <View style={{ flex: 1, gap: 8 }}>
-              <View>
-                <Text style={[s.ringName, { color: RING_COLORS.dark.minutes }]}>MINUTES</Text>
-                <Text style={s.ringValue}>{formatDuration(todaySum.seconds)}<Text style={s.ringOf}>{t?.minutes ? ` of ${t.minutes} min` : ''}{rings.minutes >= 100 ? '  ✓' : ''}</Text></Text>
-              </View>
-              <View>
-                <Text style={[s.ringName, { color: RING_COLORS.dark.words }]}>WORDS</Text>
-                <Text style={s.ringValue}>{todaySum.words.toLocaleString()}<Text style={s.ringOf}>{line(todaySum.words, t?.words)}{rings.words >= 100 ? '  ✓' : ''}</Text></Text>
-              </View>
-              <View>
-                <Text style={[s.ringName, { color: RING_COLORS.dark.sessions }]}>SESSIONS</Text>
-                <Text style={s.ringValue}>
-                  {todaySum.count}
-                  <Text style={s.ringOf}>{line(todaySum.count, t?.sessions)}{rings.sessions >= 100 ? '  ✓' : ''}</Text>
-                </Text>
-              </View>
-            </View>
-          </View>
+          <RingStats summary={todaySum} rings={rings} off={rest} playKey={playKey} />
           <Pressable onPress={() => setGoalsOpen(true)} style={s.editGoals}>
             <Text style={s.editGoalsText}>Edit goals</Text>
           </Pressable>
@@ -226,10 +211,6 @@ const s = StyleSheet.create({
   todayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   todayLabel: { fontSize: 12.5, fontWeight: '700', color: 'rgba(255,255,255,0.88)' },
   todayLink: { fontSize: 12.5, fontWeight: '700', color: colors.cream, textDecorationLine: 'underline' },
-  todayBody: { flexDirection: 'row', alignItems: 'center', gap: 18 },
-  ringName: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6 },
-  ringValue: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', marginTop: 1 },
-  ringOf: { fontWeight: '500', color: 'rgba(255,255,255,0.75)' },
   editGoals: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
   editGoalsText: { color: colors.cream, fontSize: 12.5, fontWeight: '700', textDecorationLine: 'underline' },
   startWrap: { borderRadius: radius.md },

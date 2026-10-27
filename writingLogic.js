@@ -632,3 +632,10 @@ export function calendarDay(sessions, dailyGoals, goals, key, today = dayKey()) 
     off: isRestGoal(goal),
   };
 }
+
+// "2.4×" when a ring is at least 1.1 times its goal, else null.
+export function overMultiple(pct) {
+  if (pct == null) return null;
+  const x = Math.round(pct / 10) / 10;
+  return x > 1 ? `${x}×` : null;
+}

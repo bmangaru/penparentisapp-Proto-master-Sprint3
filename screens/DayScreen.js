@@ -10,7 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen, Button } from '../components/ui';
 import { colors, gradients, radius, space } from '../theme';
 import Face from '../components/Face';
-import { dayKey, daySummary, describeDailyGoal, durationTile, parseDayKey } from '../writingLogic';
+import { dayKey, daySummary, describeDailyGoal, isRestGoal, parseDayKey } from '../writingLogic';
+import RingStats from '../components/RingStats';
 import { feelingLabel } from '../feelings';
 import { deleteDay, loadAll, shareDays } from '../writingStore';
 
@@ -23,10 +24,15 @@ export default function DayScreen({ navigation, route }) {
   const key = route.params?.day || dayKey();
   const isToday = key === dayKey();
   const [day, setDay] = useState(null);
+  // Bumped each time the page opens, so the rings fill again.
+  const [playKey, setPlayKey] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
-      loadAll().then(({ goals, sessions, dailyGoals }) => setDay(daySummary(sessions, dailyGoals, key, goals)));
+      loadAll().then(({ goals, sessions, dailyGoals }) => {
+        setDay(daySummary(sessions, dailyGoals, key, goals));
+        setPlayKey((n) => (n || 0) + 1);
+      });
     }, [key])
   );
 
@@ -42,7 +48,6 @@ export default function DayScreen({ navigation, route }) {
   const goalLine = day
     ? [
         day.goal && day.goal.plan === 'rest' ? 'Rest day' : day.goal && !day.goal.skipped ? `Goal: ${describeDailyGoal(day.goal)}` : 'No goal set',
-        day.pct != null ? `${day.pct}%` : null,
         day.feeling ? `Felt ${feelingLabel(day.feeling).toLowerCase()}` : null,
       ].filter(Boolean).join(' · ')
     : '';
@@ -56,10 +61,11 @@ export default function DayScreen({ navigation, route }) {
         <Text style={s.title}>{fullDate}</Text>
         <Text style={s.goalLine}>{goalLine}</Text>
         {day && (
-          <View style={s.stats}>
-            <Stat n={day.words.toLocaleString()} label={day.words === 1 ? 'word' : 'words'} />
-            <Stat n={durationTile(day.seconds).value} label={durationTile(day.seconds).unit} />
-            <Stat n={day.count} label={day.count === 1 ? 'check-in' : 'check-ins'} />
+          <View style={s.rings}>
+            <RingStats
+              summary={day} rings={day.rings} off={isRestGoal(day.goal)} size={92}
+              noGoal="no goal that day" playKey={playKey}
+            />
           </View>
         )}
       </LinearGradient>
@@ -116,25 +122,16 @@ export default function DayScreen({ navigation, route }) {
   );
 }
 
-function Stat({ n, label }) {
-  return (
-    <View style={s.stat}>
-      <Text style={s.statNum}>{n}</Text>
-      <Text style={s.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const s = StyleSheet.create({
   header: { paddingHorizontal: space.lg, paddingBottom: space.lg },
   back: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   backText: { color: colors.cream, fontSize: 14, fontWeight: '700' },
   title: { color: '#FFFFFF', fontSize: 24, fontWeight: '700', marginTop: 2 },
   goalLine: { color: 'rgba(255,255,255,0.84)', fontSize: 13, marginTop: 6 },
-  stats: { flexDirection: 'row', gap: 8, marginTop: 16 },
-  stat: { flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
-  statNum: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
-  statLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 2 },
+  rings: {
+    marginTop: 16, padding: 14, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+  },
   pad: { padding: space.lg },
   h: { fontSize: 15, fontWeight: '700', color: colors.ink, marginBottom: space.sm },
   empty: { fontSize: 13.5, color: colors.muted },
