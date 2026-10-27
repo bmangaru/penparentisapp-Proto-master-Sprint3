@@ -1,5 +1,7 @@
 // screens/EventsScreen.js — Pen Parentis events + your writing calendar.
-//   • Coming up: Eventbrite events, top to bottom (next one highlighted)
+//   • Coming up: Eventbrite events, top to bottom. One is open at a time
+//     (gold border, description, Register); tap another and it opens in place
+//     while the first folds down. Leaving the app resets it to the next event.
 //   • the selected day: its three rings, and any event that day
 //   • a scrollable rolling calendar that opens on this week, can show earlier
 //     weeks, and runs across months. Each day shows its rings (minutes, words,
@@ -7,12 +9,13 @@
 // Tapping a past day you wrote on opens what you wrote that day.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Animated } from 'react-native';
+import {
+  View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Animated, AppState, LayoutAnimation, Platform, UIManager,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen, Header, openLink } from '../components/ui';
 import Rings, { RING_COLORS } from '../components/Rings';
-import Sheet from '../components/Sheet';
 import { colors, lift, radius, space } from '../theme';
 import { LINKS } from '../links';
 import { eventWhen, eventsByDay, loadEvents, upcoming } from '../eventsService';
@@ -26,6 +29,18 @@ const VISIBLE_WEEKS = 4;
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const STAR = '#E0AE45';
 
+// Older Android builds need this switched on for LayoutAnimation.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+// The fold / unfold when switching the open event.
+const SWAP = {
+  duration: 320,
+  create: { type: 'easeInEaseOut', property: 'opacity' },
+  update: { type: 'easeInEaseOut' },
+  delete: { type: 'easeInEaseOut', property: 'opacity' },
+};
+
 export default function EventsScreen({ navigation }) {
   const today = useToday();
   const [data, setData] = useState({ goals: DEFAULT_GOALS, dailyGoals: {}, sessions: [] });
@@ -36,7 +51,11 @@ export default function EventsScreen({ navigation }) {
   const [refreshFailed, setRefreshFailed] = useState(false);
   const listFade = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState(today);
-  const [openEvent, setOpenEvent] = useState(null);
+  // Which event card is open (null = the next upcoming one).
+  const [openId, setOpenId] = useState(null);
+  const scrollRef = useRef(null);
+  const padY = useRef(0);
+  const listY = useRef(0);
   const [earlier, setEarlier] = useState(0);
 
   const calRef = useRef(null);
@@ -52,6 +71,7 @@ export default function EventsScreen({ navigation }) {
   const refreshEvents = useCallback(async (force = false) => {
     setLoadingEvents(true);
     setRefreshFailed(false);
+    setOpenId(null);
     if (force) {
       await new Promise((done) => Animated.timing(listFade, { toValue: 0, duration: 200, useNativeDriver: true }).start(done));
       setEvents([]);
@@ -66,6 +86,19 @@ export default function EventsScreen({ navigation }) {
     Animated.timing(listFade, { toValue: 1, duration: 450, useNativeDriver: true }).start();
   }, []);
   useEffect(() => { refreshEvents(); }, []);
+
+  // Leaving the app (not just switching tabs) puts the next event back on top.
+  useEffect(() => {
+    let wasAway = false;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') wasAway = true;
+      if (state === 'active' && wasAway) {
+        wasAway = false;
+        setOpenId(null);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const byDay = useMemo(() => eventsByDay(events), [events]);
   const coming = useMemo(() => upcoming(events), [events]);
@@ -102,15 +135,26 @@ export default function EventsScreen({ navigation }) {
     calHeight.current = h;
   }
 
-  const next = coming[0];
-  const rest = coming.slice(1);
+  const activeId = coming.some((e) => e.id === openId) ? openId : coming[0]?.id;
+
+  function openEventCard(id) {
+    if (id === activeId) return;
+    LayoutAnimation.configureNext(SWAP);
+    setOpenId(id);
+  }
+
+  // From the calendar: scroll up to the list and open that event there.
+  function showEvent(id) {
+    scrollRef.current?.scrollTo({ y: Math.max(0, padY.current + listY.current - 8), animated: true });
+    setTimeout(() => openEventCard(id), 250);
+  }
 
   return (
-    <Screen>
+    <Screen scrollRef={scrollRef}>
       <Header title="Events & Calendar" subtitle="What’s coming up, and every day you showed up to write" />
-      <View style={s.pad}>
+      <View style={s.pad} onLayout={(e) => { padY.current = e.nativeEvent.layout.y; }}>
         {/* ---------- Coming up (top to bottom) ---------- */}
-        <View style={s.titleRow}>
+        <View style={s.titleRow} onLayout={(e) => { listY.current = e.nativeEvent.layout.y; }}>
           <Text style={s.h}>Coming up</Text>
           <Pressable
             onPress={() => refreshEvents(true)}
@@ -138,35 +182,14 @@ export default function EventsScreen({ navigation }) {
           </View>
         )}
 
-        {next && (
-          <Pressable onPress={() => setOpenEvent(next)} style={[s.next, lift]} accessibilityRole="button">
-            <View style={s.nextHead}>
-              <Ionicons name="star" size={15} color={STAR} />
-              <Text style={s.kicker}>NEXT EVENT</Text>
-            </View>
-            <View style={s.eventRow}>
-              <DateBadge iso={next.start} big />
-              <View style={{ flex: 1 }}>
-                <Text style={s.nextName}>{next.name}</Text>
-                <Text style={s.when}>{eventWhen(next)}</Text>
-                <Text style={s.venue}>{next.online ? 'Online' : next.venue}</Text>
-              </View>
-            </View>
-            <Pressable onPress={() => openLink(next.url)} style={s.register} accessibilityRole="link">
-              <Text style={s.registerText}>Register on Eventbrite</Text>
-            </Pressable>
-          </Pressable>
-        )}
-
-        {rest.map((e) => (
-          <Pressable key={e.id} onPress={() => setOpenEvent(e)} style={[s.row, lift]} accessibilityRole="button">
-            <DateBadge iso={e.start} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.rowName} numberOfLines={2}>{e.name}</Text>
-              <Text style={s.when}>{eventWhen(e)}{e.online ? ' · Online' : e.venue ? ` · ${e.venue}` : ''}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-          </Pressable>
+        {coming.map((e, i) => (
+          <EventCard
+            key={e.id}
+            event={e}
+            open={e.id === activeId}
+            isNext={i === 0}
+            onOpen={() => openEventCard(e.id)}
+          />
         ))}
 
         {!loadingEvents && (
@@ -203,7 +226,7 @@ export default function EventsScreen({ navigation }) {
                   : sel.off ? 'Day off' : 'No writing this day'}
             </Text>
             {selEvents.map((e) => (
-              <Pressable key={e.id} onPress={() => setOpenEvent(e)} style={s.dayEvent}>
+              <Pressable key={e.id} onPress={() => showEvent(e.id)} style={s.dayEvent} accessibilityRole="button">
                 <Ionicons name="star" size={14} color={STAR} />
                 <Text style={s.dayEventText} numberOfLines={1}>{e.name}</Text>
               </Pressable>
@@ -261,18 +284,44 @@ export default function EventsScreen({ navigation }) {
         </View>
       </View>
 
-      <Sheet
-        visible={!!openEvent}
-        onClose={() => setOpenEvent(null)}
-        title={openEvent?.name || ''}
-        subtitle={openEvent ? `${eventWhen(openEvent)} · ${openEvent.online ? 'Online' : openEvent.venue || ''}` : ''}
-      >
-        {openEvent?.summary ? <Text style={[s.body, { marginBottom: space.md }]}>{openEvent.summary}</Text> : null}
-        <Pressable onPress={() => openEvent && openLink(openEvent.url)} style={s.register} accessibilityRole="link">
-          <Text style={s.registerText}>Register on Eventbrite</Text>
-        </Pressable>
-      </Sheet>
     </Screen>
+  );
+}
+
+// One event. Open: gold border, label, full name, description, Register.
+// Closed: a slim row; tapping it opens it (and folds the other one).
+function EventCard({ event: e, open, isNext, onOpen }) {
+  const where = e.online ? 'Online' : e.venue;
+  if (!open) {
+    return (
+      <Pressable onPress={onOpen} style={[s.row, lift]} accessibilityRole="button" accessibilityHint="Shows details and Register">
+        <DateBadge iso={e.start} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowName} numberOfLines={2}>{e.name}</Text>
+          <Text style={s.when}>{eventWhen(e)}{where ? ` · ${where}` : ''}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+      </Pressable>
+    );
+  }
+  return (
+    <View style={[s.next, lift]}>
+      <View style={s.nextHead}>
+        <Ionicons name="star" size={15} color={STAR} />
+        <Text style={s.kicker}>{isNext ? 'NEXT EVENT' : 'COMING UP'}</Text>
+      </View>
+      <View style={s.eventRow}>
+        <DateBadge iso={e.start} big />
+        <View style={{ flex: 1 }}>
+          <Text style={s.nextName}>{e.name}</Text>
+          <Text style={s.when}>{eventWhen(e)}{where ? ` · ${where}` : ''}</Text>
+        </View>
+      </View>
+      {e.summary ? <Text style={s.body}>{e.summary}</Text> : null}
+      <Pressable onPress={() => openLink(e.url)} style={s.register} accessibilityRole="link">
+        <Text style={s.registerText}>Register on Eventbrite</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -341,7 +390,6 @@ const s = StyleSheet.create({
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   nextName: { fontSize: 16, fontWeight: '700', color: colors.ink },
   when: { fontSize: 12.5, color: colors.body, marginTop: 2 },
-  venue: { fontSize: 12, color: colors.muted, marginTop: 1 },
   register: { backgroundColor: colors.royal, borderRadius: radius.md, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
   registerText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 

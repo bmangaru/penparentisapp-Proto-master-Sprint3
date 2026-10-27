@@ -3,7 +3,7 @@
 //
 // Animation: whenever `playKey` changes (e.g. each time the screen comes into
 // focus) the rings start empty and fill in order — minutes, words, sessions —
-// in about 1.3 s, with the numbers counting up. A ring past its goal runs into
+// in about 2.5 s, with the numbers counting up. A ring past its goal runs into
 // its second lap and a gold "2.4×" chip pops in. With the phone's Reduce
 // Motion setting on, everything appears already filled.
 
@@ -12,8 +12,8 @@ import { View, Text, StyleSheet, Animated, AccessibilityInfo } from 'react-nativ
 import Rings, { RING_COLORS } from './Rings';
 import { formatDuration, overMultiple } from '../writingLogic';
 
-export const FILL_MS = 1300;
-const STAGGER = { minutes: [0, 700], words: [200, 900], sessions: [400, 800] }; // [start, length] ms
+export const FILL_MS = 2500;
+const STAGGER = { minutes: [0, 1250], words: [450, 1450], sessions: [900, 1600] }; // [start, length] ms — done at 2.5 s
 const ease = (x) => 1 - Math.pow(1 - x, 3);
 const frac = (t, k) => ease(Math.max(0, Math.min(1, (t - STAGGER[k][0]) / STAGGER[k][1])));
 
