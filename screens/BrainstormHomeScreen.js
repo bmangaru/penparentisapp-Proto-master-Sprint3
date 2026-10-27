@@ -32,6 +32,11 @@ export default function BrainstormHomeScreen({ navigation }) {
   const [data, setData] = useState({ goals: DEFAULT_GOALS, hasGoals: true, dailyGoals: {}, sessions: [] });
 
   const [goalsOpen, setGoalsOpen] = useState(false);
+  // Which goal the goals screen edits ('usual' | 'light'), and whether it was
+  // opened from the "Your goals" sheet (then Save / ‹ Back return to it).
+  const [goalsKind, setGoalsKind] = useState('usual');
+  const [goalsFromPlan, setGoalsFromPlan] = useState(false);
+  const [planKey, setPlanKey] = useState(0); // bumped each time the sheet is opened fresh
   const [planOpen, setPlanOpen] = useState(false);
   const [planMode, setPlanMode] = useState('daily'); // 'daily' pop-up or 'edit' from the Today card
   const dismissedFor = useRef(null);
@@ -55,8 +60,8 @@ export default function BrainstormHomeScreen({ navigation }) {
 
   // First run → set goals once. After that, ask "What's your goal today?" once a day.
   function maybePrompt(d) {
-    if (!d.hasGoals) setGoalsOpen(true);
-    else if (!d.dailyGoals[today] && dismissedFor.current !== today) { setPlanMode('daily'); setPlanOpen(true); }
+    if (!d.hasGoals) { setGoalsKind('usual'); setGoalsFromPlan(false); setGoalsOpen(true); }
+    else if (!d.dailyGoals[today] && dismissedFor.current !== today) openPlan('daily');
   }
 
   // Reload whenever this screen regains focus (e.g. back from the typer), and
@@ -71,12 +76,26 @@ export default function BrainstormHomeScreen({ navigation }) {
     }, [today])
   );
 
+  function openPlan(mode) {
+    setPlanMode(mode);
+    setPlanKey((k) => k + 1);
+    setPlanOpen(true);
+  }
+
+  // "Edit" on My usual / A lighter day in the goals sheet.
+  function editGoal(kind) {
+    setGoalsKind(kind);
+    setGoalsFromPlan(true);
+    setGoalsOpen(true); // the goals sheet hides while this is open, then comes back
+  }
+
   async function onSaveGoals(g) {
     const goals = await saveGoals(g);
     const next = { ...data, goals, hasGoals: true };
     setData(next);
     setGoalsOpen(false);
-    if (!next.dailyGoals[today]) setTimeout(() => setPlanOpen(true), 350);
+    // Opened from "Your goals": it reappears by itself. First run: ask about today.
+    if (!goalsFromPlan && !next.dailyGoals[today]) setTimeout(() => openPlan('daily'), 350);
   }
 
   async function onPickPlan(plan) {
@@ -99,8 +118,7 @@ export default function BrainstormHomeScreen({ navigation }) {
   function onStartPress() {
     if (button.state === 'setGoal') {
       startAfterPlan.current = true;
-      setPlanMode('daily');
-      setPlanOpen(true);
+      openPlan('daily');
     } else {
       navigation.navigate('BrainstormWriter');
     }
@@ -134,7 +152,7 @@ export default function BrainstormHomeScreen({ navigation }) {
           <View style={s.todayHead}>
             <Text style={s.todayLabel}>Today · {todayLabel}{rest ? ' · rest day' : ''}</Text>
             {/* One link: today's goal and your usual goals, in one sheet. */}
-            <Pressable onPress={() => { setPlanMode('edit'); setPlanOpen(true); }} hitSlop={8} accessibilityRole="button">
+            <Pressable onPress={() => openPlan('edit')} hitSlop={8} accessibilityRole="button">
               <Text style={s.todayLink}>Edit goals</Text>
             </Pressable>
           </View>
@@ -182,8 +200,10 @@ export default function BrainstormHomeScreen({ navigation }) {
         visible={goalsOpen}
         goals={goals}
         firstTime={!data.hasGoals}
+        kind={goalsKind}
         onSave={onSaveGoals}
-        onClose={() => setGoalsOpen(false)}
+        onBack={goalsFromPlan ? () => setGoalsOpen(false) : undefined}
+        onClose={() => { setGoalsOpen(false); if (goalsFromPlan) closePlan(); }}
       />
 
       <TodayPlanSheet
@@ -193,7 +213,8 @@ export default function BrainstormHomeScreen({ navigation }) {
         current={dailyGoals[today]}
         onPick={onPickPlan}
         mode={planMode}
-        onEditGoals={() => { setPlanOpen(false); setTimeout(() => setGoalsOpen(true), 300); }}
+        openKey={planKey}
+        onEdit={editGoal}
         onClose={closePlan}
       />
 

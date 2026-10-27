@@ -211,11 +211,7 @@ export function stepGoal(kind, value, dir) {
   return [...list].reverse().find((v) => v < value) ?? list[0];
 }
 
-// Largest step at or below `value` (never below the smallest step).
-function floorStep(kind, value) {
-  const list = GOAL_STEPS[kind];
-  return [...list].reverse().find((v) => v <= value) ?? list[0];
-}
+
 export const RINGS = ['minutes', 'words', 'sessions'];
 
 export function normalizeGoals(g) {
@@ -225,7 +221,30 @@ export function normalizeGoals(g) {
     const v = Number(g?.[k]);
     if (v > 0) out[k] = Math.min(GOAL_LIMITS[k].max, Math.max(GOAL_LIMITS[k].min, v));
   }
+  // Optional custom "A lighter day" ({ words, minutes, sessions }). Absent =
+  // half of the usual. Never higher than the usual, so it's always lighter.
+  if (g?.light && typeof g.light === 'object') {
+    const light = {};
+    for (const k of RINGS) {
+      const v = Number(g.light[k]);
+      light[k] = v > 0 ? Math.min(out[k], Math.max(GOAL_LIMITS[k].min, v)) : halfStep(k, out[k]);
+    }
+    out.light = light;
+  }
   return out;
+}
+
+// Half of a usual target, rounded down to a step (never below the smallest).
+function halfStep(kind, value) {
+  const list = GOAL_STEPS[kind];
+  return [...list].reverse().find((v) => v <= value / 2) ?? list[0];
+}
+
+// The lighter-day targets: your custom ones if set, else half of your usual.
+export function lightTargets(goals) {
+  const g = normalizeGoals(goals);
+  if (g.light) return { ...g.light };
+  return { words: halfStep('words', g.words), minutes: halfStep('minutes', g.minutes), sessions: halfStep('sessions', g.sessions) };
 }
 
 // Index into goals.days: 0 = Monday … 6 = Sunday. (Stored Monday-first;
@@ -243,10 +262,9 @@ export function planFor(kind, goals) {
   const g = normalizeGoals(goals);
   if (kind === 'rest') return { plan: 'rest' };
   if (kind === 'light') {
-    // Half of your usual, rounded down to a step: 50 words · 5 min · 2 sessions
-    // → 25 words · 2 min · 1 session.
-    const half = (k) => floorStep(k, g[k] / 2);
-    return { plan: 'light', words: half('words'), minutes: half('minutes'), sessions: half('sessions') };
+    // Your custom lighter day, or half of your usual rounded down to a step
+    // (50 words · 5 min · 2 sessions → 25 words · 2 min · 1 session).
+    return { plan: 'light', ...lightTargets(g) };
   }
   return { plan: 'usual', words: g.words, minutes: g.minutes, sessions: g.sessions };
 }
