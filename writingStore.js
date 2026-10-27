@@ -19,7 +19,7 @@ import { AppState, Share } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { allMedalProgress, diffMedals } from './medals';
 import { feelingLabel } from './feelings';
-import { dayKey, dayShareText, formatDuration, msUntilMidnight, normalizeGoals, parseDayKey } from './writingLogic';
+import { dayKey, dayShareText, formatDuration, msUntilMidnight, normalizeGoals, parseDayKey, upgradeOldGoals } from './writingLogic';
 
 export const GOALS_KEY = 'pp.goals.v2'; // usual goals: three rings + writing days
 export const DAILY_GOALS_KEY = 'pp.dailyGoals.v1';
@@ -40,8 +40,18 @@ export async function loadAll() {
     readJSON(DAILY_GOALS_KEY, {}),
     readJSON(SESSIONS_KEY, []),
   ]);
+  // Old one-ring daily goals become three-ring goals, saved so they stay
+  // the same after midnight.
+  let daily = dailyGoals;
+  if (goals) {
+    const up = upgradeOldGoals(dailyGoals, sessions, normalizeGoals(goals));
+    if (up.changed) {
+      daily = up.dailyGoals;
+      await AsyncStorage.setItem(DAILY_GOALS_KEY, JSON.stringify(daily));
+    }
+  }
   // `hasGoals` is false until the writer saves goals once (first-run setup).
-  return { goals: normalizeGoals(goals), hasGoals: !!goals, dailyGoals, sessions };
+  return { goals: normalizeGoals(goals), hasGoals: !!goals, dailyGoals: daily, sessions };
 }
 
 export async function saveGoals(goals) {

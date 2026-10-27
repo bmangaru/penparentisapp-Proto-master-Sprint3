@@ -639,3 +639,35 @@ export function overMultiple(pct) {
   const x = Math.round(pct / 10) / 10;
   return x > 1 ? `${x}×` : null;
 }
+
+// One-time fix-up for goals saved by the old one-ring goal sheet
+// ({ type: 'word', target: 50 }). For each such day:
+//   • if a session that day was saved with a three-ring goal (sessions keep
+//     the goal they were written against), use the latest one, which is the
+//     goal you actually saw on the Today card that day;
+//   • otherwise, for today or later, fill minutes and sessions from your usual goals.
+// Older days with no three-ring session keep their words-only goal.
+// Returns { dailyGoals, changed } so the caller can save it once.
+export function upgradeOldGoals(dailyGoals, sessions, goals, today = dayKey()) {
+  const out = { ...dailyGoals };
+  let changed = false;
+  for (const [key, g] of Object.entries(dailyGoals || {})) {
+    if (!g || g.plan || g.skipped || !g.type) continue;
+    const seen = (sessions || [])
+      .filter((s) => s.day === key && s.dailyGoal && s.dailyGoal.plan && s.dailyGoal.plan !== 'rest')
+      .sort((a, b) => String(a.endedAt || a.startedAt).localeCompare(String(b.endedAt || b.startedAt)));
+    let next = null;
+    if (seen.length) {
+      const { plan, words, minutes, sessions: n } = seen[seen.length - 1].dailyGoal;
+      next = { plan, words, minutes, sessions: n };
+    } else if (goals && key >= today) {
+      const usual = planFor('usual', goals);
+      next = g.type === 'time' ? { ...usual, minutes: g.target } : { ...usual, words: g.target };
+    }
+    if (next) {
+      out[key] = { ...next, upgradedFrom: { type: g.type, target: g.target }, setAt: g.setAt };
+      changed = true;
+    }
+  }
+  return { dailyGoals: out, changed };
+}
