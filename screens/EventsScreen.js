@@ -107,7 +107,7 @@ export default function EventsScreen({ navigation }) {
 
   return (
     <Screen>
-      <Header title="Events" subtitle="Salons, readings and your writing days" />
+      <Header title="Events & Calendar" subtitle="What’s coming up, and every day you showed up to write" />
       <View style={s.pad}>
         {/* ---------- Coming up (top to bottom) ---------- */}
         <View style={s.titleRow}>

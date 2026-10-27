@@ -7,7 +7,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Sheet from './Sheet';
 import Rings, { RING_COLORS } from './Rings';
 import { colors, radius, space } from '../theme';
-import { GOAL_LIMITS, normalizeGoals } from '../writingLogic';
+import { GOAL_LIMITS, normalizeGoals, stepGoal } from '../writingLogic';
 
 const ROWS = [
   { k: 'minutes', name: 'Minutes', sub: 'Time writing each day', unit: ' min' },
@@ -21,8 +21,7 @@ export default function GoalsSheet({ visible, goals, firstTime, onSave, onClose 
   useEffect(() => { if (visible) setG(normalizeGoals(goals)); }, [visible]);
 
   const step = (k, dir) => {
-    const L = GOAL_LIMITS[k];
-    setG((cur) => ({ ...cur, [k]: Math.min(L.max, Math.max(L.min, cur[k] + dir * L.step)) }));
+    setG((cur) => ({ ...cur, [k]: stepGoal(k, cur[k], dir) }));
   };
   const toggleDay = (i) => setG((cur) => {
     const days = cur.days.slice();
@@ -54,11 +53,23 @@ export default function GoalsSheet({ visible, goals, firstTime, onSave, onClose 
               <Text style={s.rowName}>{r.name}</Text>
               <Text style={s.rowSub}>{r.sub}</Text>
             </View>
-            <Pressable onPress={() => step(r.k, -1)} style={s.stepBtn} accessibilityRole="button" accessibilityLabel={`Less ${r.name.toLowerCase()}`}>
+            <Pressable
+              onPress={() => step(r.k, -1)}
+              disabled={g[r.k] <= GOAL_LIMITS[r.k].min}
+              style={[s.stepBtn, g[r.k] <= GOAL_LIMITS[r.k].min && s.stepOff]}
+              accessibilityRole="button"
+              accessibilityLabel={`Less ${r.name.toLowerCase()}`}
+            >
               <Text style={s.stepText}>−</Text>
             </Pressable>
             <Text style={s.value}>{g[r.k].toLocaleString()}{r.unit}</Text>
-            <Pressable onPress={() => step(r.k, 1)} style={s.stepBtn} accessibilityRole="button" accessibilityLabel={`More ${r.name.toLowerCase()}`}>
+            <Pressable
+              onPress={() => step(r.k, 1)}
+              disabled={g[r.k] >= GOAL_LIMITS[r.k].max}
+              style={[s.stepBtn, g[r.k] >= GOAL_LIMITS[r.k].max && s.stepOff]}
+              accessibilityRole="button"
+              accessibilityLabel={`More ${r.name.toLowerCase()}`}
+            >
               <Text style={s.stepText}>+</Text>
             </Pressable>
           </View>
@@ -105,6 +116,7 @@ const s = StyleSheet.create({
   rowName: { fontSize: 14.5, fontWeight: '700', color: colors.ink },
   rowSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   stepBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: 'rgba(10,22,51,0.2)', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  stepOff: { opacity: 0.3 },
   stepText: { fontSize: 20, color: colors.ink, lineHeight: 22 },
   value: { minWidth: 58, textAlign: 'center', fontSize: 16, fontWeight: '800', color: colors.ink },
   h: { fontSize: 14, fontWeight: '700', color: colors.ink, marginTop: space.md, marginBottom: 8 },

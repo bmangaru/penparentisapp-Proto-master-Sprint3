@@ -69,7 +69,20 @@ function TabNavigator() {
           }
           return <Ionicons name={ICONS[route.name]} size={focused ? 23 : 21} color={color} />;
         },
-        tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600', textTransform: 'none', marginTop: 2 },
+        // Labels stay on one line: "Communities" used to break in two. On a very
+        // narrow phone the text shrinks a little instead of wrapping.
+        tabBarLabel: ({ color }) => (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            maxFontSizeMultiplier={1.15}
+            style={[s.tabLabel, { color }]}
+          >
+            {route.name}
+          </Text>
+        ),
+        tabBarItemStyle: { paddingHorizontal: 0 },
         tabBarStyle: { backgroundColor: colors.paper, borderTopWidth: 1, borderTopColor: colors.line, elevation: 0 },
         tabBarIndicatorStyle: {
           backgroundColor: colors.royalDeep, height: 3, borderRadius: 3, width: 26, marginLeft: '6%', top: 0,
@@ -132,6 +145,7 @@ export default function App() {
 }
 
 const s = StyleSheet.create({
+  tabLabel: { fontSize: 10.5, fontWeight: '600', marginTop: 2, textAlign: 'center', width: '100%', paddingHorizontal: 1 },
   infoBtn: {
     position: 'absolute', right: 14,
     width: 30, height: 30, borderRadius: 15,

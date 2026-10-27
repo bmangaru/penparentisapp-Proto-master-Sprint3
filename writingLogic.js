@@ -192,11 +192,30 @@ export function sessionsThisWeek(sessions, date = new Date()) {
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_GOALS = { words: 100, minutes: 15, sessions: 1, days: [true, true, true, true, true, false, false] };
-export const GOAL_LIMITS = {
-  minutes: { step: 5, min: 5, max: 180 },
-  words: { step: 50, min: 50, max: 5000 },
-  sessions: { step: 1, min: 1, max: 5 },
+// The values the − / + buttons step through for each ring: small steps at the
+// low end, bigger ones higher up.
+export const GOAL_STEPS = {
+  minutes: [1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180],
+  words: [25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000, 3000, 5000],
+  sessions: [1, 2, 3, 4, 5],
 };
+export const GOAL_LIMITS = Object.fromEntries(
+  Object.entries(GOAL_STEPS).map(([k, list]) => [k, { min: list[0], max: list[list.length - 1] }])
+);
+
+// Next value up (dir = 1) or down (dir = -1) from `value`. Works even if the
+// value isn't one of the steps (e.g. a goal saved by an older version).
+export function stepGoal(kind, value, dir) {
+  const list = GOAL_STEPS[kind];
+  if (dir > 0) return list.find((v) => v > value) ?? list[list.length - 1];
+  return [...list].reverse().find((v) => v < value) ?? list[0];
+}
+
+// Largest step at or below `value` (never below the smallest step).
+function floorStep(kind, value) {
+  const list = GOAL_STEPS[kind];
+  return [...list].reverse().find((v) => v <= value) ?? list[0];
+}
 export const RINGS = ['minutes', 'words', 'sessions'];
 
 export function normalizeGoals(g) {
@@ -223,7 +242,9 @@ export function planFor(kind, goals) {
   const g = normalizeGoals(goals);
   if (kind === 'rest') return { plan: 'rest' };
   if (kind === 'light') {
-    const half = (k) => Math.max(GOAL_LIMITS[k].min, Math.floor(g[k] / 2 / GOAL_LIMITS[k].step) * GOAL_LIMITS[k].step);
+    // Half of your usual, rounded down to a step: 50 words · 5 min · 2 sessions
+    // → 25 words · 2 min · 1 session.
+    const half = (k) => floorStep(k, g[k] / 2);
     return { plan: 'light', words: half('words'), minutes: half('minutes'), sessions: half('sessions') };
   }
   return { plan: 'usual', words: g.words, minutes: g.minutes, sessions: g.sessions };
