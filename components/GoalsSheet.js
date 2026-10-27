@@ -14,7 +14,8 @@ const ROWS = [
   { k: 'words', name: 'Words', sub: 'Words typed each day', unit: '' },
   { k: 'sessions', name: 'Sessions', sub: 'Times you sit down to write', unit: '' },
 ];
-const DAYS = [['M', 'Monday'], ['T', 'Tuesday'], ['W', 'Wednesday'], ['T', 'Thursday'], ['F', 'Friday'], ['S', 'Saturday'], ['S', 'Sunday']];
+// Shown Sunday first like a calendar; `i` is the index in goals.days (0 = Monday).
+const DAYS = [['S', 'Sunday', 6], ['M', 'Monday', 0], ['T', 'Tuesday', 1], ['W', 'Wednesday', 2], ['T', 'Thursday', 3], ['F', 'Friday', 4], ['S', 'Saturday', 5]];
 
 export default function GoalsSheet({ visible, goals, firstTime, onSave, onClose }) {
   const [g, setG] = useState(normalizeGoals(goals));
@@ -78,7 +79,7 @@ export default function GoalsSheet({ visible, goals, firstTime, onSave, onClose 
 
       <Text style={s.h}>My writing days</Text>
       <View style={s.days}>
-        {DAYS.map(([short, full], i) => {
+        {DAYS.map(([short, full, i]) => {
           const on = g.days[i];
           return (
             <Pressable

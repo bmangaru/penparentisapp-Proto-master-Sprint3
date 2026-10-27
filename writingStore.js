@@ -34,6 +34,24 @@ async function readJSON(key, fallback) {
   }
 }
 
+// Observer: screens subscribe and reload whenever goals, daily plans or
+// sessions are saved, so no screen keeps drawing with old settings.
+const listeners = new Set();
+export function onDataChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+function notify() {
+  for (const fn of listeners) {
+    try { fn(); } catch { /* a screen's handler failing shouldn't stop the others */ }
+  }
+}
+
+// Hook: runs `reload` whenever saved data changes (while the screen is mounted).
+export function useDataChange(reload) {
+  useEffect(() => onDataChange(reload), [reload]);
+}
+
 export async function loadAll() {
   const [goals, dailyGoals, sessions] = await Promise.all([
     readJSON(GOALS_KEY, null),
@@ -57,6 +75,7 @@ export async function loadAll() {
 export async function saveGoals(goals) {
   const g = normalizeGoals(goals);
   await AsyncStorage.setItem(GOALS_KEY, JSON.stringify(g));
+  notify();
   return g;
 }
 
@@ -64,6 +83,7 @@ export async function saveDailyGoal(goal, key = dayKey()) {
   const all = await readJSON(DAILY_GOALS_KEY, {});
   all[key] = { ...goal, setAt: new Date().toISOString() };
   await AsyncStorage.setItem(DAILY_GOALS_KEY, JSON.stringify(all));
+  notify();
   return all;
 }
 
@@ -73,12 +93,14 @@ export async function saveSession(session) {
   if (i >= 0) list[i] = { ...list[i], ...session };
   else list.unshift(session);
   await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(list));
+  notify();
   return list;
 }
 
 export async function deleteSession(id) {
   const list = (await readJSON(SESSIONS_KEY, [])).filter((s) => s.id !== id);
   await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(list));
+  notify();
   return list;
 }
 
@@ -105,6 +127,7 @@ export async function syncMedals(data) {
 export async function deleteDay(key) {
   const list = (await readJSON(SESSIONS_KEY, [])).filter((s) => s.day !== key);
   await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(list));
+  notify();
   return list;
 }
 

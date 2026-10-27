@@ -20,11 +20,11 @@ export function parseDayKey(key) {
   return new Date(y, m - 1, d);
 }
 
-// Monday 00:00 of the week containing `date`.
+// Sunday 00:00 of the week containing `date` (weeks run Sunday → Saturday,
+// like a regular calendar).
 export function startOfWeek(date = new Date()) {
   const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() + ((day === 0 ? -6 : 1) - day));
+  d.setDate(d.getDate() - d.getDay());
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -228,7 +228,8 @@ export function normalizeGoals(g) {
   return out;
 }
 
-// 0 = Monday … 6 = Sunday.
+// Index into goals.days: 0 = Monday … 6 = Sunday. (Stored Monday-first;
+// screens show the days Sunday-first.)
 export function weekdayIndex(key) {
   return (parseDayKey(key).getDay() + 6) % 7;
 }
@@ -321,10 +322,10 @@ export function toGoText(goal, summary) {
   return parts.join(' · ');
 }
 
-// This week, Monday to Sunday, for the rings strip.
+// This week, Sunday to Saturday, for the rings strip.
 export function weekSummary(sessions, dailyGoals, goals, date = new Date()) {
   const today = dayKey(date);
-  const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const labels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const planned = { words: 0, minutes: 0, sessions: 0 };
   const done = { words: 0, seconds: 0, count: 0 };
   let writingDays = 0;
@@ -606,7 +607,7 @@ export function buildInsights(sessions, dailyGoals = {}, now = new Date(), goals
 // ---------- Events calendar ----------
 
 // Rolling calendar rows: `before` weeks earlier than this one, this week, and
-// `after` weeks later. Each row is 7 day keys, Monday first. Months run on
+// `after` weeks later. Each row is 7 day keys, Sunday first. Months run on
 // across rows (late October and early November share a screen).
 export function calendarWeeks(date = new Date(), before = 0, after = 11) {
   const start = startOfWeek(date);

@@ -22,11 +22,11 @@ import { eventWhen, eventsByDay, loadEvents, upcoming } from '../eventsService';
 import {
   DEFAULT_GOALS, calendarDay, calendarWeeks, describeDailyGoal, formatDuration, parseDayKey,
 } from '../writingLogic';
-import { loadAll, useToday } from '../writingStore';
+import { loadAll, useDataChange, useToday } from '../writingStore';
 
 const ROW_H = 64;
 const VISIBLE_WEEKS = 4;
-const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']; // Sunday first, like a regular calendar
 const STAR = '#E0AE45';
 
 // Older Android builds need this switched on for LayoutAnimation.
@@ -60,9 +60,20 @@ export default function EventsScreen({ navigation }) {
 
   const calRef = useRef(null);
   const calHeight = useRef(0);
-  const pendingShift = useRef(false);
+  const calY = useRef(0);
+  const earlierH = useRef(40);      // height of the "↑ Earlier weeks" row
+  const pendingShift = useRef(0);   // + px to keep in place after adding weeks, − after removing
+  const scrolledUp = useRef(false); // has the user scrolled up into the earlier weeks yet?
 
-  useFocusEffect(useCallback(() => { loadAll().then(setData); }, [today]));
+  const reloadData = useCallback(() => { loadAll().then(setData); }, []);
+  // Reload on focus, and whenever goals / plans / sessions are saved anywhere,
+  // so the calendar never draws with old goal settings.
+  useFocusEffect(useCallback(() => {
+    reloadData();
+    // Leaving the tab folds earlier weeks away again.
+    return () => { setEarlier(0); scrolledUp.current = false; };
+  }, [today]));
+  useDataChange(reloadData);
   useEffect(() => { setSelected(today); }, [today]);
 
   // Refresh: the list fades out and clears, "Getting the latest events…"
@@ -121,18 +132,48 @@ export default function EventsScreen({ navigation }) {
     if (!d.future && !d.isToday && d.count > 0) openDay(d.key);
   }
 
+  // Where this week's row starts inside the calendar scroll.
+  const thisWeekY = () => earlierH.current + earlier * ROW_H;
+
   function showEarlier() {
-    pendingShift.current = true;
+    scrolledUp.current = false;
+    pendingShift.current = 4 * ROW_H;
     setEarlier((n) => n + 4);
   }
 
-  // Keep the same weeks in view after adding earlier ones above them.
+  // Fold the earlier weeks away, keeping what's on screen in place.
+  function foldEarlier() {
+    if (!earlier) return;
+    pendingShift.current = -earlier * ROW_H;
+    scrolledUp.current = false;
+    setEarlier(0);
+  }
+
+  function backToThisWeek() {
+    calRef.current?.scrollTo({ y: thisWeekY(), animated: true });
+    setTimeout(foldEarlier, 350);
+  }
+
   function onCalSize(_, h) {
-    if (pendingShift.current && calHeight.current) {
-      calRef.current?.scrollTo({ y: h - calHeight.current, animated: false });
-      pendingShift.current = false;
+    const shift = pendingShift.current;
+    if (shift && calHeight.current) {
+      pendingShift.current = 0;
+      const y = Math.max(0, calY.current + shift);
+      calRef.current?.scrollTo({ y, animated: false });
+      calY.current = y;
+      // Just added weeks: glide up so they come into view.
+      if (shift > 0) setTimeout(() => calRef.current?.scrollTo({ y: 0, animated: true }), 30);
     }
     calHeight.current = h;
+  }
+
+  // Scrolling back down to this week folds the earlier weeks away.
+  function onCalScroll(e) {
+    const y = e.nativeEvent.contentOffset.y;
+    calY.current = y;
+    if (!earlier) return;
+    if (y < thisWeekY() - ROW_H) scrolledUp.current = true;
+    else if (scrolledUp.current && y >= thisWeekY() - 4) foldEarlier();
   }
 
   const activeId = coming.some((e) => e.id === openId) ? openId : coming[0]?.id;
@@ -211,7 +252,7 @@ export default function EventsScreen({ navigation }) {
         <View style={[s.card, lift, s.dayCard]}>
           <Rings
             minutes={sel.rings.minutes} words={sel.rings.words} sessions={sel.rings.sessions}
-            off={sel.off && !sel.count} faded={sel.future} size={70}
+            faded={sel.future} size={70}
           />
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={s.dayTitle}>
@@ -256,14 +297,22 @@ export default function EventsScreen({ navigation }) {
           <View style={s.weekHead}>
             {WEEKDAYS.map((d, i) => <Text key={i} style={s.weekHeadText}>{d}</Text>)}
           </View>
+          <View>
           <ScrollView
             ref={calRef}
             style={{ height: ROW_H * VISIBLE_WEEKS + 6 }}
             nestedScrollEnabled
             showsVerticalScrollIndicator
             onContentSizeChange={onCalSize}
+            onScroll={onCalScroll}
+            scrollEventThrottle={32}
           >
-            <Pressable onPress={showEarlier} style={s.earlier} accessibilityRole="button">
+            <Pressable
+              onPress={showEarlier}
+              onLayout={(e) => { earlierH.current = e.nativeEvent.layout.height; }}
+              style={s.earlier}
+              accessibilityRole="button"
+            >
               <Text style={s.earlierText}>↑  Earlier weeks</Text>
             </Pressable>
             {weeks.map((w) => (
@@ -280,6 +329,12 @@ export default function EventsScreen({ navigation }) {
               </View>
             ))}
           </ScrollView>
+          {earlier > 0 && (
+            <Pressable onPress={backToThisWeek} style={s.backPill} accessibilityRole="button">
+              <Text style={s.backPillText}>↓  Back to this week</Text>
+            </Pressable>
+          )}
+          </View>
           <Text style={s.hint}>Tap a past day to read what you wrote.</Text>
         </View>
       </View>
@@ -352,7 +407,7 @@ function DayCell({ day, selected, hasEvent, onPress }) {
       <View>
         <Rings
           minutes={day.rings.minutes} words={day.rings.words} sessions={day.rings.sessions}
-          off={day.off && !day.count} faded={day.future} size={34}
+          faded={day.future} size={34}
         />
         {hasEvent && (
           <View style={s.star} pointerEvents="none">
@@ -426,5 +481,11 @@ const s = StyleSheet.create({
   monthTag: { fontSize: 10, fontWeight: '800', color: '#8A5E12' },
   star: { position: 'absolute', top: -9, right: -11 },
   starIcon: { textShadowColor: 'rgba(138,94,18,0.45)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 } },
+  backPill: {
+    position: 'absolute', alignSelf: 'center', bottom: 10, backgroundColor: colors.royal, borderRadius: 999,
+    paddingHorizontal: 14, minHeight: 34, justifyContent: 'center',
+    shadowColor: colors.royalDeep, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
+  },
+  backPillText: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
   hint: { fontSize: 11.5, color: colors.muted, textAlign: 'center', marginTop: 8 },
 });

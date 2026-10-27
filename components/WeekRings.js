@@ -1,5 +1,6 @@
-// components/WeekRings.js — "This week": seven small ring sets, Monday to
-// Sunday, with days off dotted, plus the week's totals against what you planned.
+// components/WeekRings.js — "This week": seven small ring sets, Sunday to
+// Saturday, plus the week's totals against what you planned. Days off look
+// like any other empty day (just labelled "off").
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -28,7 +29,7 @@ export default function WeekRings({ week, onPressDay }) {
             <Text style={[s.label, d.isToday && s.labelToday]}>{d.label}</Text>
             <Rings
               minutes={d.rings.minutes} words={d.rings.words} sessions={d.rings.sessions}
-              off={d.off && !d.count} faded={d.future} size={38}
+              faded={d.future} size={38}
             />
             <Text style={s.note}>{d.isToday ? 'today' : d.off ? 'off' : ''}</Text>
           </Pressable>
