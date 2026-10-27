@@ -1,6 +1,6 @@
-// components/GoalsSheet.js — the ONE place to set goals: a daily target for
-// each ring (minutes, words, sessions) and which days of the week you write.
-// The week's totals are worked out from those, so there's no separate weekly goal.
+// components/GoalsSheet.js — set a daily target for each ring (minutes,
+// words, sessions). Your usual goal applies every day; there are no set
+// writing days and no weekly goal.
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -14,10 +14,8 @@ const ROWS = [
   { k: 'words', name: 'Words', sub: 'Words typed each day', unit: '' },
   { k: 'sessions', name: 'Sessions', sub: 'Times you sit down to write', unit: '' },
 ];
-// Shown Sunday first like a calendar; `i` is the index in goals.days (0 = Monday).
-const DAYS = [['S', 'Sunday', 6], ['M', 'Monday', 0], ['T', 'Tuesday', 1], ['W', 'Wednesday', 2], ['T', 'Thursday', 3], ['F', 'Friday', 4], ['S', 'Saturday', 5]];
 
-// kind 'usual': the three rings + writing days (first run, and Edit on "My usual").
+// kind 'usual': the three rings (first run, and Edit on "My usual").
 // kind 'light': just the three rings for "A lighter day" (never above your usual),
 //   with "Use half of my usual". Saves goals.light, or removes it to go back to half.
 // onBack: show "‹ Your goals" (when opened from the goals sheet).
@@ -39,11 +37,6 @@ export default function GoalsSheet({ visible, goals, firstTime, kind = 'usual', 
     setG((cur) => ({ ...cur, [k]: Math.min(max(k), stepGoal(k, cur[k], dir)) }));
     if (light) setCustom(true);
   };
-  const toggleDay = (i) => setG((cur) => {
-    const days = cur.days.slice();
-    days[i] = !days[i];
-    return { ...cur, days };
-  });
   const half = lightTargets({ ...usual, light: undefined });
   function useHalf() {
     setG((cur) => ({ ...cur, ...half }));
@@ -59,15 +52,11 @@ export default function GoalsSheet({ visible, goals, firstTime, kind = 'usual', 
     }
   }
 
-  const n = g.days.filter(Boolean).length;
-  const week = n === 0
-    ? 'Pick at least one writing day.'
-    : `Writing ${n} day${n === 1 ? '' : 's'} a week: ${(g.words * n).toLocaleString()} words, ${g.minutes * n} minutes and ${g.sessions * n} session${g.sessions * n === 1 ? '' : 's'}. Days off never break your week.`;
 
   const title = light ? 'A lighter day' : firstTime ? 'Your writing goals' : 'My usual';
   const subtitle = light
     ? 'For busy days. Pick it any day from “Your goals”.'
-    : firstTime ? 'One goal per ring. Close them on your writing days.' : 'Your goal on a normal writing day.';
+    : firstTime ? 'One goal per ring, every day. On busy days pick a lighter day or rest.' : 'Your goal on a normal day.';
 
   return (
     <Sheet visible={visible} onClose={firstTime ? () => {} : onClose} title={title} subtitle={subtitle}>
@@ -130,35 +119,9 @@ export default function GoalsSheet({ visible, goals, firstTime, kind = 'usual', 
             </Pressable>
           ) : null}
         </>
-      ) : (
-        <>
-          <Text style={s.h}>My writing days</Text>
-          <View style={s.days}>
-            {DAYS.map(([short, full, i]) => {
-              const on = g.days[i];
-              return (
-                <Pressable
-                  key={full}
-                  onPress={() => toggleDay(i)}
-                  style={[s.day, on && s.dayOn]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={full}
-                >
-                  <Text style={[s.dayText, on && s.dayTextOn]}>{short}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+      ) : null}
 
-          <View style={s.week}>
-            <Text style={s.weekKicker}>YOUR WEEK, WORKED OUT FOR YOU</Text>
-            <Text style={s.weekText}>{week}</Text>
-          </View>
-        </>
-      )}
-
-      <Pressable style={[s.save, !light && n === 0 && { opacity: 0.5 }]} disabled={!light && n === 0} onPress={save}>
+      <Pressable style={s.save} onPress={save}>
         <Text style={s.saveText}>{firstTime ? 'Save goals' : 'Save'}</Text>
       </Pressable>
     </Sheet>
@@ -182,15 +145,6 @@ const s = StyleSheet.create({
   stepOff: { opacity: 0.3 },
   stepText: { fontSize: 20, color: colors.ink, lineHeight: 22 },
   value: { minWidth: 58, textAlign: 'center', fontSize: 16, fontWeight: '800', color: colors.ink },
-  h: { fontSize: 14, fontWeight: '700', color: colors.ink, marginTop: space.md, marginBottom: 8 },
-  days: { flexDirection: 'row', gap: 6 },
-  day: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: 'rgba(10,22,51,0.2)', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
-  dayOn: { backgroundColor: colors.royal, borderColor: colors.royal },
-  dayText: { fontSize: 13, fontWeight: '700', color: colors.muted },
-  dayTextOn: { color: '#FFFFFF' },
-  week: { backgroundColor: colors.cream, borderRadius: radius.md, padding: 12, marginTop: space.md },
-  weekKicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, color: '#8A5E12' },
-  weekText: { fontSize: 14, lineHeight: 20, color: colors.ink, marginTop: 4 },
   save: { backgroundColor: colors.royal, borderRadius: radius.md, minHeight: 50, alignItems: 'center', justifyContent: 'center', marginTop: space.md },
   saveText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14.5 },
 });

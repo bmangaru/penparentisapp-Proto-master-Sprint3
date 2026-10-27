@@ -184,14 +184,15 @@ export function sessionsThisWeek(sessions, date = new Date()) {
 }
 
 // ---------------------------------------------------------------------------
-// Goals: ONE setup, three daily rings (minutes, words, sessions) plus the days
-// of the week you plan to write. The week's goal is worked out from these.
-//   usual goals  { words, minutes, sessions, days: [Mon..Sun booleans] }
+// Goals: three daily rings (minutes, words, sessions). Your usual goal applies
+// every day; on days you can't write, pick "A lighter day" or "Rest today".
+// (There are no set writing days and no weekly goal.)
+//   usual goals  { words, minutes, sessions, light?: { words, minutes, sessions } }
 //   a day's plan { plan: 'usual' | 'light', words, minutes, sessions } | { plan: 'rest' }
 // Older saved day goals ({ type: 'word'|'time', target } / { skipped }) still work.
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_GOALS = { words: 100, minutes: 15, sessions: 1, days: [true, true, true, true, true, false, false] };
+export const DEFAULT_GOALS = { words: 100, minutes: 15, sessions: 1 };
 // The values the − / + buttons step through for each ring: small steps at the
 // low end, bigger ones higher up.
 export const GOAL_STEPS = {
@@ -215,8 +216,8 @@ export function stepGoal(kind, value, dir) {
 export const RINGS = ['minutes', 'words', 'sessions'];
 
 export function normalizeGoals(g) {
-  const days = Array.isArray(g?.days) && g.days.length === 7 ? g.days.map(Boolean) : DEFAULT_GOALS.days;
-  const out = { ...DEFAULT_GOALS, days };
+  // Older saves may have a `days` list (writing days); it's no longer used.
+  const out = { ...DEFAULT_GOALS };
   for (const k of RINGS) {
     const v = Number(g?.[k]);
     if (v > 0) out[k] = Math.min(GOAL_LIMITS[k].max, Math.max(GOAL_LIMITS[k].min, v));
@@ -247,15 +248,6 @@ export function lightTargets(goals) {
   return { words: halfStep('words', g.words), minutes: halfStep('minutes', g.minutes), sessions: halfStep('sessions', g.sessions) };
 }
 
-// Index into goals.days: 0 = Monday … 6 = Sunday. (Stored Monday-first;
-// screens show the days Sunday-first.)
-export function weekdayIndex(key) {
-  return (parseDayKey(key).getDay() + 6) % 7;
-}
-
-export function isWritingDay(goals, key) {
-  return normalizeGoals(goals).days[weekdayIndex(key)];
-}
 
 // "What's your goal today?" → My usual / A lighter day (half, never below the minimum) / Rest today.
 export function planFor(kind, goals) {
@@ -274,7 +266,7 @@ export function isRestGoal(goal) {
 }
 
 // The goal that applies to a day: the plan picked that day, else your usual
-// goals on a writing day, else a day off (null).
+// goals (every day), or null when there are no goals yet.
 export function goalForDay(dailyGoals, goals, key) {
   const stored = dailyGoals?.[key];
   if (stored) {
@@ -289,11 +281,11 @@ export function goalForDay(dailyGoals, goals, key) {
     }
     return stored;
   }
-  if (goals && isWritingDay(goals, key)) return { ...planFor('usual', goals), implied: true };
+  if (goals) return { ...planFor('usual', goals), implied: true };
   return null;
 }
 
-// Ring targets for a day (null = rest day / day off / no goal).
+// Ring targets for a day (null = rest day / no goal).
 export function dayTargets(goal) {
   if (isRestGoal(goal)) return null;
   if (goal.plan) return { minutes: goal.minutes, words: goal.words, sessions: goal.sessions };
@@ -340,29 +332,24 @@ export function toGoText(goal, summary) {
   return parts.join(' · ');
 }
 
-// This week, Sunday to Saturday, for the rings strip.
+// This week, Sunday to Saturday, for the rings strip: each day against its own
+// goal, plus plain totals of what you wrote (no weekly target).
 export function weekSummary(sessions, dailyGoals, goals, date = new Date()) {
   const today = dayKey(date);
   const labels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-  const planned = { words: 0, minutes: 0, sessions: 0 };
-  const done = { words: 0, seconds: 0, count: 0 };
-  let writingDays = 0;
-  let closedDays = 0;
+  const done = { words: 0, seconds: 0, count: 0 }; // what you wrote this week
+  let closedDays = 0; // days with all rings closed
   const days = weekDayKeys(date).map((key, i) => {
     const goal = goalForDay(dailyGoals, goals, key);
     const sum = summarize(sessionsOnDay(sessions, key));
     const rings = ringProgress(goal, sum);
-    if (rings.targets) {
-      writingDays += 1;
-      for (const k of RINGS) planned[k] += rings.targets[k] || 0;
-      if (rings.closed) closedDays += 1;
-    }
+    if (rings.closed) closedDays += 1;
     done.words += sum.words;
     done.seconds += sum.seconds;
     done.count += sum.count;
     return { key, label: labels[i], isToday: key === today, future: key > today, off: !rings.targets, rings, ...sum };
   });
-  return { days, planned, done, writingDays, closedDays };
+  return { days, done, closedDays };
 }
 
 

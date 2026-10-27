@@ -21,7 +21,7 @@ import { allMedalProgress, diffMedals } from './medals';
 import { feelingLabel } from './feelings';
 import { dayKey, dayShareText, formatDuration, msUntilMidnight, normalizeGoals, parseDayKey, upgradeOldGoals } from './writingLogic';
 
-export const GOALS_KEY = 'pp.goals.v2'; // usual goals: three rings + writing days
+export const GOALS_KEY = 'pp.goals.v2'; // usual goals: three rings (+ optional lighter day)
 export const DAILY_GOALS_KEY = 'pp.dailyGoals.v1';
 export const SESSIONS_KEY = 'pp.sessions.v1';
 

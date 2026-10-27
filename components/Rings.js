@@ -5,7 +5,7 @@
 //   • over 100%: it keeps going for a second lap in a slightly darker shade,
 //     with a small shadow at the tip so the overlap shows (capped just under
 //     two full laps; the "2.4×" chip next to the numbers says the rest)
-// `off` draws a dotted, faded set for a rest day / day off; `faded` for future days.
+// `off` draws a dotted, faded set (the "Rest today" picture); `faded` for future days.
 // This component never animates by itself (calendars draw dozens of them);
 // RingStats animates by redrawing it with growing values.
 

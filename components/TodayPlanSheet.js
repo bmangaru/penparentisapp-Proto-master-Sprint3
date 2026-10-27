@@ -1,6 +1,6 @@
 // components/TodayPlanSheet.js — the one goals sheet.
 //   • Today: My usual / A lighter day / Rest today (resets at midnight)
-//   • "Edit" on My usual (rings + writing days) and on A lighter day (rings only)
+//   • "Edit" on My usual and on A lighter day (the three rings)
 // Opened by "Edit goals" on the Today card (mode 'edit', title "Your goals"),
 // and once a day as "What's your goal today?" (mode 'daily').
 
@@ -9,7 +9,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Sheet from './Sheet';
 import Rings from './Rings';
 import { colors, radius, space } from '../theme';
-import { describeDailyGoal, isWritingDay, planFor } from '../writingLogic';
+import { describeDailyGoal, planFor } from '../writingLogic';
 
 const OPTIONS = [
   { id: 'usual', title: 'My usual', cta: 'Start with my usual' },
@@ -17,18 +17,15 @@ const OPTIONS = [
   { id: 'rest', title: 'Rest today', cta: 'Take the day off' },
 ];
 
-export default function TodayPlanSheet({ visible, goals, today, current, onPick, onEdit, onClose, mode = 'daily', openKey }) {
-  const writingDay = isWritingDay(goals, today);
+export default function TodayPlanSheet({ visible, goals, current, onPick, onEdit, onClose, mode = 'daily', openKey }) {
   const [picked, setPicked] = useState('usual');
   useEffect(() => {
     // Only when opened fresh, so coming back from an Edit keeps your pick.
-    setPicked(current?.plan || (writingDay ? 'usual' : 'rest'));
+    setPicked(current?.plan || 'usual');
   }, [openKey]);
 
   const weekday = new Date().toLocaleDateString(undefined, { weekday: 'long' });
-  const subtitle = writingDay
-    ? `${weekday} is one of your writing days. Resets at midnight.`
-    : `${weekday} is usually a day off — write anyway if you like.`;
+  const subtitle = `Pick a goal for ${weekday}. Resets at midnight.`;
   const edit = mode === 'edit';
   const cta = edit ? "Save today's goal" : OPTIONS.find((o) => o.id === picked).cta;
 

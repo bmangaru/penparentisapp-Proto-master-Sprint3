@@ -209,7 +209,6 @@ export default function BrainstormHomeScreen({ navigation }) {
       <TodayPlanSheet
         visible={planOpen && !goalsOpen}
         goals={goals}
-        today={today}
         current={dailyGoals[today]}
         onPick={onPickPlan}
         mode={planMode}
