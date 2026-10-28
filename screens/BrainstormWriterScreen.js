@@ -15,6 +15,12 @@
 // Autosave: a draft is saved about 2 s after you stop typing (and when the app
 // goes to the background); the cloud by ✕ shows "Saving…" then "✓ Saved".
 // Aa: text size (5 steps, remembered) and Focus mode (just your words).
+//
+// The clock: after a minute with no typing or scrolling it auto-pauses (that
+// quiet minute still counts — thinking is writing). Typing always resumes it,
+// whether it was auto-paused or paused with the button. Scrolling, and using
+// the prompt (show, Refresh, level), keep a running clock alive — but only
+// within 3 minutes of your last typing — and never restart a paused one.
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -53,10 +59,40 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   const [blockedPastes, setBlockedPastes] = useState(0);
   const [notice, setNotice] = useState('');
   const [paused, setPaused] = useState(false);
+  const [pauseReason, setPauseReason] = useState(null); // null | 'you' | 'idle'
+  // Last time you typed or scrolled (ms). A minute without either auto-pauses.
+  const lastActive = useRef(Date.now());
+  // Last time you typed (ms). Scrolling and prompt taps only keep the clock
+  // alive within BROWSE_GRACE_MS of this, so they can't run it forever.
+  const lastTyped = useRef(Date.now());
+  const [backToast, setBackToast] = useState(false);
+  const toastTimer = useRef(null);
+  function pauseClock(reason) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setPaused(true);
+    setPauseReason(reason);
+  }
+  function resumeClock(withToast) {
+    lastActive.current = Date.now();
+    lastTyped.current = Date.now(); // a fresh start: browsing counts again
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setPaused(false);
+    setPauseReason(null);
+    if (withToast) {
+      setBackToast(true);
+      clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setBackToast(false), 1800);
+    }
+  }
+  // Scrolling / prompt taps: count as activity only if you've typed recently.
+  function markActive() {
+    if (Date.now() - lastTyped.current < BROWSE_GRACE_MS) lastActive.current = Date.now();
+  }
   const [prompt, setPrompt] = useState(route?.params?.prompt || null);
   // Simple / Thoughtful / Deep — shared with Brainstorm and Home.
   const [level, setLevel] = usePromptLevel();
   function pickLevel(l) {
+    markActive();
     setLevel(l);
     setPrompt(promptForDay(session.day, l));
   }
@@ -146,14 +182,27 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   // Stopwatch. Stops while the app is in the background or the check-in is open.
   const [appActive, setAppActive] = useState(true);
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (st) => setAppActive(st === 'active'));
+    const sub = AppState.addEventListener('change', (st) => {
+      setAppActive(st === 'active');
+      // Coming back to the app gives you a fresh minute before auto-pause.
+      if (st === 'active') { lastActive.current = Date.now(); lastTyped.current = Date.now(); }
+    });
     return () => sub.remove();
   }, []);
   useEffect(() => {
     if (paused || !appActive || sheet) return undefined;
-    const id = setInterval(() => setSeconds((x) => x + 1), 1000);
+    const id = setInterval(() => {
+      // A full minute with no typing or scrolling: stop the clock. The quiet
+      // minute itself was already counted second by second.
+      if (Date.now() - lastActive.current >= IDLE_PAUSE_MS) {
+        pauseClock('idle');
+        return;
+      }
+      setSeconds((x) => x + 1);
+    }, 1000);
     return () => clearInterval(id);
   }, [paused, appActive, sheet]);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   function flash(msg) {
     setNotice(msg);
@@ -175,6 +224,9 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     textRef.current = t;
     setText(t);
     lastTypedAt.current = secondsRef.current;
+    lastTyped.current = Date.now();
+    lastActive.current = Date.now();
+    if (paused) resumeClock(true); // typing always picks the clock back up
     const words = countWords(t);
     if (words > highestThisEntry.current) {
       const delta = words - highestThisEntry.current;
@@ -194,10 +246,12 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   const showNudge = ready && !prompt && !nudgeOff && !paused && !sheet && seconds - lastTypedAt.current >= STUCK_AFTER;
 
   function showPrompt() {
+    markActive();
     setPrompt((p) => p || promptForDay(session.day, level));
   }
   // ✦ Prompt: tap to show, tap again to hide.
   function togglePrompt() {
+    markActive();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     if (prompt) setPrompt(null);
     else showPrompt();
@@ -335,15 +389,32 @@ export default function BrainstormWriterScreen({ navigation, route }) {
             >
               <Text style={s.aaText}>Aa</Text>
             </Pressable>
-            <Pressable onPress={() => setPaused((p) => !p)} hitSlop={8} style={s.pauseBtn} accessibilityRole="button">
-              <Text style={s.pauseText}>{paused ? 'Resume' : 'Pause'}</Text>
+            <Pressable
+              onPress={() => (paused ? resumeClock(false) : pauseClock('you'))}
+              hitSlop={8}
+              style={[s.pauseBtn, paused && s.resumeBtn]}
+              accessibilityRole="button"
+            >
+              <Text style={[s.pauseText, paused && { color: '#FFFFFF' }]}>{paused ? 'Resume' : 'Pause'}</Text>
             </Pressable>
           </View>
         )}
       </View>
 
       {/* Today's rings, live: earlier writing today + this session. */}
-      {!focus ? <LiveRings goal={dailyGoal} totals={todayTotals} /> : null}
+      {!focus ? <LiveRings goal={dailyGoal} totals={todayTotals} clock={paused ? 'paused' : 'running'} /> : null}
+
+      {/* Paused (by you or after a quiet minute): typing picks it back up.
+          Shown even in Focus mode, since the clock matters there too. */}
+      {paused && !sheet ? (
+        <View style={s.pauseNote} accessibilityLiveRegion="polite">
+          <View style={s.pauseIcon}><Ionicons name="pause" size={13} color={colors.muted} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.pauseTitle}>{pauseReason === 'idle' ? 'Paused, you’ve been quiet a minute' : 'Paused'}</Text>
+            <Text style={s.pauseSub}>{pauseReason === 'idle' ? 'Start typing and the clock picks up.' : 'Typing picks it back up, or tap Resume.'}</Text>
+          </View>
+        </View>
+      ) : null}
 
       {focus ? null : notice ? (
         <View style={s.notice}><Text style={s.noticeText}>{notice}</Text></View>
@@ -371,7 +442,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
               <Text style={[s.levelChipText, { color: ls.fg }]}>✦ {LEVEL_LABEL[level]} ▾</Text>
             </Pressable>
             <View style={{ flex: 1 }} />
-            <Pressable onPress={() => setPrompt(nextPrompt(prompt, level))} hitSlop={6} style={s.promptAct} accessibilityRole="button" accessibilityLabel="Refresh prompt">
+            <Pressable onPress={() => { markActive(); setPrompt(nextPrompt(prompt, level)); }} hitSlop={6} style={s.promptAct} accessibilityRole="button" accessibilityLabel="Refresh prompt">
               <Text style={[s.promptActText, { color: ls.fg }]}>↻ Refresh</Text>
             </Pressable>
             <Pressable onPress={togglePrompt} hitSlop={6} style={s.promptAct} accessibilityRole="button" accessibilityLabel="Hide the prompt">
@@ -395,6 +466,8 @@ export default function BrainstormWriterScreen({ navigation, route }) {
           contextMenuHidden // hides Copy / Paste on long-press (iOS + Android)
           placeholder="Start typing…"
           placeholderTextColor={colors.muted}
+          onScroll={markActive} // rereading keeps a running clock alive (never restarts a paused one)
+          onSelectionChange={markActive}
           style={[s.editor, { fontSize: TEXT_SIZES[sizeIdx], lineHeight: Math.round(TEXT_SIZES[sizeIdx] * 1.53) }]}
           textAlignVertical="top"
         />
@@ -415,6 +488,12 @@ export default function BrainstormWriterScreen({ navigation, route }) {
           <Pressable onPress={() => setNudgeOff(true)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Not now">
             <Text style={s.nudgeX}>×</Text>
           </Pressable>
+        </View>
+      ) : null}
+
+      {backToast ? (
+        <View style={s.toastWrap} pointerEvents="none">
+          <View style={s.toast}><Text style={s.toastText}><Text style={{ color: '#9BE3B0' }}>▶</Text>  Back on the clock</Text></View>
         </View>
       ) : null}
 
@@ -475,6 +554,12 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     </KeyboardAvoidingView>
   );
 }
+
+// A minute with no typing or scrolling pauses the clock.
+const IDLE_PAUSE_MS = 60 * 1000;
+// Scrolling and prompt taps keep the clock alive only within 3 minutes of
+// your last typing (or of opening / resuming the page).
+const BROWSE_GRACE_MS = 3 * 60 * 1000;
 
 // Writing text sizes (A− / A+), remembered on the phone.
 const TEXT_SIZES = [15, 17, 19, 22, 25];
@@ -548,6 +633,17 @@ const s = StyleSheet.create({
   noticeXText: { fontSize: 13, color: colors.muted, fontWeight: '700' },
   pauseBtn: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.cream },
   pauseText: { fontSize: 12, fontWeight: '700', color: colors.royalDeep },
+  resumeBtn: { backgroundColor: colors.royal },
+  pauseNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: space.lg, marginBottom: 8,
+    backgroundColor: '#EEF1F7', borderWidth: 1, borderColor: '#D7DDEA', borderRadius: radius.md, paddingVertical: 9, paddingHorizontal: 12,
+  },
+  pauseIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D7DDEA', alignItems: 'center', justifyContent: 'center' },
+  pauseTitle: { fontSize: 13, fontWeight: '700', color: colors.ink },
+  pauseSub: { fontSize: 12, color: colors.body },
+  toastWrap: { alignItems: 'center', marginBottom: 8 },
+  toast: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 8, paddingHorizontal: 14 },
+  toastText: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
   notice: { marginHorizontal: space.lg, marginBottom: 6, backgroundColor: colors.cream, borderRadius: radius.sm, padding: 10 },
   noticeText: { fontSize: 12.5, color: colors.body },
   chip: {
