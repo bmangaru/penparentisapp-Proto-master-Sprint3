@@ -1,5 +1,5 @@
 // medals.js — the writing medals: what each one counts, its four tiers
-// (bronze, silver, gold, platinum), and how far along you are.
+// (bronze, silver, gold, diamond), and how far along you are.
 // Pure functions, no React Native imports, so this can be unit-tested in Node.
 //
 // Everything is worked out from saved sessions, so medals also count writing
@@ -9,8 +9,10 @@
 
 import { dailyPct, dayPieces, formatDuration, goalForDay, longestStreak, sessionsOnDay, summarize } from './writingLogic';
 
-export const TIERS = ['bronze', 'silver', 'gold', 'platinum'];
-export const TIER_LABEL = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
+// The top tier used to be called platinum. Saved progress is stored by tier
+// number (0–3), not name, so the rename doesn't affect anyone's medals.
+export const TIERS = ['bronze', 'silver', 'gold', 'diamond'];
+export const TIER_LABEL = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold', diamond: 'Diamond' };
 
 const HOUR = 3600;
 
@@ -130,7 +132,7 @@ export function formatAmount(medal, n) {
   return Math.round(n).toLocaleString();
 }
 
-// tierIndex: -1 = none yet, 0 = bronze … 3 = platinum.
+// tierIndex: -1 = none yet, 0 = bronze … 3 = diamond.
 export function medalProgress(medal, value) {
   let tierIndex = -1;
   medal.tiers.forEach((t, i) => { if (value >= t) tierIndex = i; });
@@ -159,7 +161,7 @@ export function allMedalProgress(sessions, dailyGoals, goals) {
 }
 
 export function tierCounts(progressList) {
-  const counts = { bronze: 0, silver: 0, gold: 0, platinum: 0, total: 0 };
+  const counts = { bronze: 0, silver: 0, gold: 0, diamond: 0, total: 0 };
   for (const p of progressList) {
     for (let i = 0; i <= p.tierIndex; i += 1) counts[TIERS[i]] += 1;
     counts.total += p.tierIndex + 1;

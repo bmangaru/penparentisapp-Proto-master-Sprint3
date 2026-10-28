@@ -35,7 +35,7 @@ export default function MedalsScreen({ navigation }) {
         <View style={s.countRow}>
           {TIERS.map((t) => (
             <View key={t} style={s.countChip}>
-              <View style={[s.dot, { backgroundColor: TIER_STYLE[t].ring[1] }]} />
+              <View style={[s.dot, { backgroundColor: TIER_STYLE[t].dot }]} />
               <Text style={s.countText}>{TIER_LABEL[t]} {counts[t]}</Text>
             </View>
           ))}

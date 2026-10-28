@@ -23,7 +23,8 @@ import {
   appRatingFor, countWords, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
 } from '../writingLogic';
 import { loadAll, saveSession, shareWriting, syncMedals } from '../writingStore';
-import { nextPrompt, promptForDay } from '../prompts';
+import { LEVEL_LABEL, PROMPT_LEVELS, nextPrompt, promptForDay } from '../prompts';
+import usePromptLevel from '../components/usePromptLevel';
 
 export default function BrainstormWriterScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -46,6 +47,12 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   const [notice, setNotice] = useState('');
   const [paused, setPaused] = useState(false);
   const [prompt, setPrompt] = useState(route?.params?.prompt || null);
+  // Simple / Thoughtful / Deep — shared with Brainstorm and Home.
+  const [level, setLevel] = usePromptLevel();
+  function pickLevel(l) {
+    setLevel(l);
+    setPrompt(promptForDay(session.day, l));
+  }
   // Stopwatch second of the last keystroke, for the "Stuck?" nudge.
   const lastTypedAt = useRef(0);
   const [nudgeOff, setNudgeOff] = useState(false); // × on the nudge: no more nudges this session
@@ -153,7 +160,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   const showNudge = ready && !prompt && !nudgeOff && !paused && !sheet && seconds - lastTypedAt.current >= STUCK_AFTER;
 
   function showPrompt() {
-    setPrompt((p) => p || promptForDay(session.day));
+    setPrompt((p) => p || promptForDay(session.day, level));
   }
   // Goal status (exceeded / met / some / none). Not shown as a rating any more;
   // it only colours the weekly chart and the day bubble's progress bar.
@@ -228,7 +235,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
         </Pressable>
         <View style={s.barRight}>
           <Pressable
-            onPress={() => (prompt ? setPrompt(nextPrompt(prompt)) : showPrompt())}
+            onPress={() => (prompt ? setPrompt(nextPrompt(prompt, level)) : showPrompt())}
             hitSlop={6}
             style={[s.promptBtn, prompt && s.promptBtnOn]}
             accessibilityRole="button"
@@ -261,9 +268,22 @@ export default function BrainstormWriterScreen({ navigation, route }) {
       {prompt ? (
         <View style={s.prompt}>
           <Text style={s.promptKick}>✦ PROMPT</Text>
+          <View style={s.levels}>
+            {PROMPT_LEVELS.map((l) => (
+              <Pressable
+                key={l}
+                onPress={() => pickLevel(l)}
+                style={[s.levelBtn, level === l && s.levelOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: level === l }}
+              >
+                <Text style={[s.levelText, level === l && s.levelTextOn]}>{LEVEL_LABEL[l]}</Text>
+              </Pressable>
+            ))}
+          </View>
           <Text style={s.promptText}>“{prompt}”</Text>
           <View style={s.promptLinks}>
-            <Pressable onPress={() => setPrompt(nextPrompt(prompt))} hitSlop={8} accessibilityRole="button">
+            <Pressable onPress={() => setPrompt(nextPrompt(prompt, level))} hitSlop={8} accessibilityRole="button">
               <Text style={s.promptLink}>↻ Another</Text>
             </Pressable>
             <Pressable onPress={() => setPrompt(null)} hitSlop={8} accessibilityRole="button">
@@ -272,7 +292,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
           </View>
         </View>
       ) : ready && !text.trim() ? (
-        <Pressable onPress={() => setPrompt(promptForDay(session.day))} style={s.chip} accessibilityRole="button">
+        <Pressable onPress={showPrompt} style={s.chip} accessibilityRole="button">
           <Text style={s.chipText}>✦ Stuck? Try a prompt</Text>
         </Pressable>
       ) : null}
@@ -363,6 +383,11 @@ const s = StyleSheet.create({
   prompt: { backgroundColor: '#FFF8E6', borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#EAD9B6', paddingHorizontal: space.lg, paddingVertical: 12, marginBottom: 8 },
   promptKick: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8, color: '#8A5E12' },
   promptText: { fontSize: 16, lineHeight: 23, color: colors.ink, marginTop: 4, fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }) },
+  levels: { flexDirection: 'row', gap: 6, marginTop: 8, marginBottom: 2 },
+  levelBtn: { flex: 1, minHeight: 32, borderRadius: 999, borderWidth: 1.5, borderColor: '#E5D3AE', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  levelOn: { backgroundColor: '#8A5E12', borderColor: '#8A5E12' },
+  levelText: { fontSize: 12.5, fontWeight: '800', color: '#8A5E12' },
+  levelTextOn: { color: '#FFFFFF' },
   promptLinks: { flexDirection: 'row', gap: 18, marginTop: 8 },
   promptLink: { fontSize: 13, fontWeight: '700', color: colors.royal, minHeight: 24 },
   chip: {
