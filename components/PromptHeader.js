@@ -1,14 +1,18 @@
 // components/PromptHeader.js — the Brainstorm header with today's prompt in it:
-//   Brainstorm         Simple ▾   ↻  ✕
-//   ✦ "Today's prompt, up to two lines…"   ✎ Write
-// The level chip switches Simple → Thoughtful → Deep (remembered, and shared
-// with the writing page and Home). ↻ refreshes the prompt at that level.
-// ✕ hides it (remembered on this phone, even after closing the app), and
-// "✦ Show prompt" brings it back. Same prompt all day, new at midnight.
+//   Brainstorm
+//   ● SIMPLE ▾   ↻   ✕
+//   "Today's prompt, up to three lines…"            (✎)
+// The small row is quiet text in the level colour, but each item has a
+// finger-sized tap area. SIMPLE ▾ cycles Simple → Thoughtful → Deep (remembered,
+// and shared with the writing page and Home); ↻ refreshes the prompt at that
+// level; ✕ hides it (remembered on this phone) and "✦ Show prompt" brings it
+// back. The round pencil opens the writing page with this prompt.
+// Same prompt all day, new at midnight.
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { Header } from './ui';
 import { colors } from '../theme';
 import { LEVEL_LABEL, nextLevel, nextPrompt, promptForDay } from '../prompts';
@@ -16,14 +20,6 @@ import usePromptLevel, { LEVEL_STYLE } from './usePromptLevel';
 import { useToday } from '../writingStore';
 
 export const PROMPT_HIDDEN_KEY = 'pp.promptHidden.v1';
-
-function Round({ label, onPress, children }) {
-  return (
-    <Pressable onPress={onPress} hitSlop={6} style={s.round} accessibilityRole="button" accessibilityLabel={label}>
-      <Text style={s.roundText}>{children}</Text>
-    </Pressable>
-  );
-}
 
 export default function PromptHeader({ title, onWrite }) {
   const today = useToday();
@@ -55,30 +51,49 @@ export default function PromptHeader({ title, onWrite }) {
   }
 
   return (
-    <Header
-      title={title}
-      right={
-        <View style={s.rounds}>
-          <Pressable
-            onPress={() => setLevel(nextLevel(level))}
-            hitSlop={6}
-            style={[s.level, { backgroundColor: ls.bg }]}
-            accessibilityRole="button"
-            accessibilityLabel={`Prompt level: ${LEVEL_LABEL[level]}. Tap to change`}
-          >
-            <Text style={[s.levelText, { color: ls.fg }]}>{LEVEL_LABEL[level]} ▾</Text>
-          </Pressable>
-          <Round label="Refresh prompt" onPress={() => setPrompt(nextPrompt(prompt, level))}>↻</Round>
-          <Round label="Hide prompt" onPress={() => setHide(true)}>✕</Round>
-        </View>
-      }
-    >
+    <Header title={title}>
       <View style={s.row}>
-        <Text style={s.prompt} numberOfLines={2}>
-          <Text style={s.spark}>✦ </Text>“{prompt}”
-        </Text>
-        <Pressable onPress={() => onWrite(prompt)} style={s.write} accessibilityRole="button" accessibilityLabel="Write with this prompt">
-          <Text style={s.writeText}>✎ Write</Text>
+        <View style={{ flex: 1 }}>
+          <View style={s.tools}>
+            <Pressable
+              onPress={() => setLevel(nextLevel(level))}
+              hitSlop={{ top: 10, bottom: 10, left: 6, right: 4 }}
+              style={s.level}
+              accessibilityRole="button"
+              accessibilityLabel={`Prompt level: ${LEVEL_LABEL[level]}. Tap to change`}
+            >
+              <View style={[s.dot, { backgroundColor: ls.dot }]} />
+              <Text style={[s.levelText, { color: ls.onDark }]}>{LEVEL_LABEL[level].toUpperCase()} ▾</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setPrompt(nextPrompt(prompt, level))}
+              hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+              style={s.tool}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh prompt"
+            >
+              <Ionicons name="refresh" size={15} color="rgba(255,255,255,0.75)" />
+            </Pressable>
+            <Pressable
+              onPress={() => setHide(true)}
+              hitSlop={{ top: 10, bottom: 10, left: 4, right: 8 }}
+              style={s.tool}
+              accessibilityRole="button"
+              accessibilityLabel="Hide prompt"
+            >
+              <Ionicons name="close" size={16} color="rgba(255,255,255,0.75)" />
+            </Pressable>
+          </View>
+          <Text style={s.prompt} numberOfLines={3}>“{prompt}”</Text>
+        </View>
+        <Pressable
+          onPress={() => onWrite(prompt)}
+          hitSlop={6}
+          style={({ pressed }) => [s.pen, pressed && { transform: [{ scale: 0.95 }] }]}
+          accessibilityRole="button"
+          accessibilityLabel="Write with this prompt"
+        >
+          <Ionicons name="pencil" size={19} color={colors.royal} />
         </Pressable>
       </View>
     </Header>
@@ -86,22 +101,20 @@ export default function PromptHeader({ title, onWrite }) {
 }
 
 const s = StyleSheet.create({
-  rounds: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  level: { borderRadius: 999, paddingHorizontal: 10, minHeight: 28, justifyContent: 'center' },
-  levelText: { fontSize: 11.5, fontWeight: '800' },
-  round: {
-    width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
-  },
-  roundText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
+  tools: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2, marginLeft: -2 },
+  level: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, paddingHorizontal: 2, paddingRight: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  levelText: { fontSize: 11.5, fontWeight: '800', letterSpacing: 0.8 },
+  tool: { minWidth: 30, minHeight: 28, alignItems: 'center', justifyContent: 'center' },
   prompt: {
-    flex: 1, color: '#FFFFFF', fontSize: 14, lineHeight: 19,
+    color: '#FFFFFF', fontSize: 15, lineHeight: 21,
     fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }),
   },
-  spark: { color: '#F2C14E', fontWeight: '800' },
-  write: { backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 12, minHeight: 34, justifyContent: 'center' },
-  writeText: { color: colors.royal, fontSize: 12.5, fontWeight: '700' },
+  pen: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
+  },
   show: { borderWidth: 1, borderColor: 'rgba(242,193,78,0.55)', borderRadius: 999, paddingHorizontal: 10, minHeight: 30, justifyContent: 'center' },
   showText: { color: '#F2C14E', fontSize: 12, fontWeight: '700' },
 });
