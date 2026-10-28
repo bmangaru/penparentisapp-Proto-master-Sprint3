@@ -5,8 +5,9 @@
 // The small row is quiet text in the level colour, but each item has a
 // finger-sized tap area. SIMPLE ▾ cycles Simple → Thoughtful → Deep (remembered,
 // and shared with the writing page and Home); ↻ refreshes the prompt at that
-// level; ✕ hides it (remembered on this phone) and "✦ Show prompt" brings it
-// back. The round pencil opens the writing page with this prompt.
+// level; ✕ hides it (remembered on this phone). Hidden, the header shows the
+// quiet subtitle "Small goals, kept quietly." (same style as the Events
+// header) and "✦ Show prompt" brings the prompt back. The round pencil opens the writing page with this prompt.
 // Same prompt all day, new at midnight.
 
 import React, { useEffect, useState } from 'react';
@@ -41,6 +42,7 @@ export default function PromptHeader({ title, onWrite }) {
     return (
       <Header
         title={title}
+        subtitle="Small goals, kept quietly."
         right={
           <Pressable onPress={() => setHide(false)} hitSlop={6} style={s.show} accessibilityRole="button">
             <Text style={s.showText}>✦ Show prompt</Text>
