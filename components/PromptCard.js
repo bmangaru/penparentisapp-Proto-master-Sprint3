@@ -1,5 +1,5 @@
 // components/PromptCard.js — "Today's prompt", shown on Home and Brainstorm.
-// The same prompt all day (it changes at midnight); "Another" swaps it.
+// The same prompt all day (it changes at midnight); "Refresh" swaps it.
 // The level chip (Simple / Thoughtful / Deep) is shared with Brainstorm.
 // "Write with this" calls onWrite(prompt).
 
@@ -36,8 +36,8 @@ export default function PromptCard({ onWrite }) {
         <Pressable onPress={() => onWrite(prompt)} style={[s.btn, s.btnMain]} accessibilityRole="button">
           <Text style={[s.btnText, { color: '#FFFFFF' }]}>Write with this</Text>
         </Pressable>
-        <Pressable onPress={() => setPrompt(nextPrompt(prompt, level))} style={s.btn} accessibilityRole="button" accessibilityLabel="Another prompt">
-          <Text style={s.btnText}>↻  Another</Text>
+        <Pressable onPress={() => setPrompt(nextPrompt(prompt, level))} style={s.btn} accessibilityRole="button" accessibilityLabel="Refresh prompt">
+          <Text style={s.btnText}>↻  Refresh</Text>
         </Pressable>
       </View>
     </View>

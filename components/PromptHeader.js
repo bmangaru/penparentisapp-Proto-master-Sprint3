@@ -2,7 +2,7 @@
 //   Brainstorm         Simple ▾   ↻  ✕
 //   ✦ "Today's prompt, up to two lines…"   ✎ Write
 // The level chip switches Simple → Thoughtful → Deep (remembered, and shared
-// with the writing page and Home). ↻ shows another prompt at that level.
+// with the writing page and Home). ↻ refreshes the prompt at that level.
 // ✕ hides it (remembered on this phone, even after closing the app), and
 // "✦ Show prompt" brings it back. Same prompt all day, new at midnight.
 
@@ -68,7 +68,7 @@ export default function PromptHeader({ title, onWrite }) {
           >
             <Text style={[s.levelText, { color: ls.fg }]}>{LEVEL_LABEL[level]} ▾</Text>
           </Pressable>
-          <Round label="Another prompt" onPress={() => setPrompt(nextPrompt(prompt, level))}>↻</Round>
+          <Round label="Refresh prompt" onPress={() => setPrompt(nextPrompt(prompt, level))}>↻</Round>
           <Round label="Hide prompt" onPress={() => setHide(true)}>✕</Round>
         </View>
       }
