@@ -31,7 +31,7 @@ import SessionDoneSheet from '../components/SessionDoneSheet';
 import LiveRings from '../components/LiveRings';
 import { colors, radius, space } from '../theme';
 import {
-  appRatingFor, countWords, creditWords, editPoint, wordBag, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
+  appRatingFor, countWords, createWordCounter, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
 } from '../writingLogic';
 import { loadAll, saveSession, shareWriting, syncMedals } from '../writingStore';
 import { LEVEL_LABEL, nextLevel, nextPrompt, promptForDay } from '../prompts';
@@ -55,11 +55,12 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   const [seconds, setSeconds] = useState(0);
   const secondsRef = useRef(0);
   secondsRef.current = seconds;
-  // Words credited this session: every word typed counts, even if later
-  // deleted or reworded; retyping a word already credited doesn't (see
-  // creditWords in writingLogic). The word being typed is added live below.
+  // Words credited this session, by the five rules in writingLogic
+  // (createWordCounter): finished words count, deleting never subtracts, new
+  // writing always counts, retyping what you just deleted is an undo, and a
+  // fixed word is still one word.
   const [effortWords, setEffortWords] = useState(0);
-  const bestWords = useRef({}); // per word: most times it's been on the page
+  const wordCounter = useRef(createWordCounter(''));
   // Was the last edit adding text? Used at Finish: a last word you were still
   // typing (no space after it yet) counts — but not a fragment left mid-delete.
   const typingForward = useRef(false);
@@ -176,7 +177,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
       if (piece && piece.text.trim()) {
         const t = piece.text.replace(/\s*$/, ' ');
         textRef.current = t;
-        bestWords.current = wordBag(t); // earlier writing is already counted
+        wordCounter.current = createWordCounter(t); // earlier writing is already counted
         continues.current = true;
         setText(t);
         setResumedAt(piece.lastAt);
@@ -235,8 +236,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     if (paused) resumeClock(true); // typing always picks the clock back up
     typingForward.current = t.length > prev.length;
     // Credit finished words that are new to this entry (not the one being typed).
-    const { best, gained } = creditWords(bestWords.current, wordBag(t, editPoint(prev, t)));
-    bestWords.current = best;
+    const gained = wordCounter.current.update(t);
     if (gained > 0) setEffortWords((w) => w + gained);
     // Deleting text does NOT reduce the count — effort already spent stays counted.
   }
@@ -246,7 +246,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   const liveWords = effortWords;
   // At Finish / save: plus the last word if you were still typing it.
   function finalWords() {
-    const pending = typingForward.current ? creditWords(bestWords.current, wordBag(textRef.current)).gained : 0;
+    const pending = typingForward.current ? wordCounter.current.pending() : 0;
     return effortWords + pending;
   }
   const todayTotals = {

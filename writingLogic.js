@@ -137,18 +137,15 @@ export function countWords(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Word credit for the typer. Every word you type counts — including words you
-// later delete or reword — but retyping a word you already got credit for
-// doesn't count again (so delete-and-retype can't pad the count).
-//
-// How: keep, per word, the most times it has appeared on the page this entry
-// ("best"). Credit is earned only when a word appears more times than that.
-//   "My made me some noodles." → delete → "The food was good."
-//   the, food, was, good are new → +4 (the deleted five stay counted).
-//   Fixing "My" → "My mom": only "mom" is new → +1.
-// The word you're in the middle of typing isn't credited until you finish it
-// (a space after it, or punctuation like "noodles."), so "n", "no", "noo"…
-// never count. It does show in the live count while you type it.
+// Word credit for the typer — five rules:
+//  1. A word counts when it's finished (a space or punctuation after it).
+//     Half-typed words and leftover fragments never count.
+//  2. Deleting never takes words away.
+//  3. New writing always counts, even if it reuses words you deleted.
+//  4. Retyping exactly what you just deleted, in the same order, is an undo:
+//     those words don't count twice (stops delete-and-retype padding).
+//  5. Fixing a word is still one word ("noodels" → "noodles" counts once).
+// createWordCounter(initialText) tracks this edit by edit; see test16.
 // ---------------------------------------------------------------------------
 
 // Lower-case, without surrounding punctuation or quotes. (No \p{} classes, so
@@ -156,50 +153,169 @@ export function countWords(text) {
 export function normWord(w) {
   return String(w || '')
     .toLowerCase()
-    .replace(/^[^a-z0-9\u00c0-\u1fff\u2070-\uffff]+|[^a-z0-9\u00c0-\u1fff\u2070-\uffff]+$/g, '');
+    .replace(/^[^a-z0-9À-῿⁰-￿]+|[^a-z0-9À-῿⁰-￿]+$/g, '');
 }
 
-// Where an edit ended in the new text (≈ the cursor after typing).
-export function editPoint(prev, next) {
+// Where an edit starts and ends: common prefix length, and the end of the
+// changed region in the new text (≈ the cursor after typing).
+export function editRange(prev, next) {
   const max = Math.min(prev.length, next.length);
   let i = 0;
   while (i < max && prev[i] === next[i]) i++;
   let j = 0;
   while (j < max - i && prev[prev.length - 1 - j] === next[next.length - 1 - j]) j++;
-  return next.length - j;
+  return { start: i, prevEnd: prev.length - j, nextEnd: next.length - j };
+}
+export function editPoint(prev, next) {
+  return editRange(prev, next).nextEnd;
 }
 
-// { word: times on the page }. skipAt: a text position; the word touching it
-// (the one being typed) is left out. Pass -1 to include every word.
-export function wordBag(text, skipAt = -1) {
-  const bag = {};
+const FINISHED_END = /[.!?,;:)"”’]$/;
+
+// Words on the page with their positions. A word the cursor is inside or at
+// the end of, not ending in punctuation, is still being typed: open = true.
+export function wordTokens(text, cursor = -1) {
+  const out = [];
   const re = /\S+/g;
   let m;
   while ((m = re.exec(text || ''))) {
     const start = m.index;
     const end = start + m[0].length;
-    // The word at the cursor is still being typed — unless it already ends in
-    // punctuation ("noodles."), which means it's finished.
-    if (skipAt >= start && skipAt <= end && !/[.!?,;:)"”’]$/.test(m[0])) continue;
-    const k = normWord(m[0]);
-    if (k) bag[k] = (bag[k] || 0) + 1;
+    const w = normWord(m[0]);
+    if (!w) continue;
+    // (The cursor sitting at a word's start isn't typing it.)
+    const open = cursor > start && cursor <= end && !FINISHED_END.test(m[0]);
+    out.push({ w, start, end, open });
   }
+  return out;
+}
+
+// { word: times on the page } for finished words (skipAt = cursor, -1 = all).
+export function wordBag(text, skipAt = -1) {
+  const bag = {};
+  for (const t of wordTokens(text, skipAt)) if (!t.open) bag[t.w] = (bag[t.w] || 0) + 1;
   return bag;
 }
 
-// Credit words in `bag` beyond what `best` has seen. Returns the new best and
-// how many words were gained. Pure: `best` isn't changed.
-export function creditWords(best, bag) {
-  const out = { ...best };
-  let gained = 0;
-  for (const k of Object.keys(bag)) {
-    const had = out[k] || 0;
-    if (bag[k] > had) {
-      gained += bag[k] - had;
-      out[k] = bag[k];
-    }
+function bagDiff(a, b) { // words in b beyond a → { word: n }
+  const out = {};
+  for (const k of Object.keys(b)) if ((b[k] || 0) > (a[k] || 0)) out[k] = b[k] - (a[k] || 0);
+  return out;
+}
+// Pick, in text order, the tokens inside [from, to) whose words are in `want`.
+function pickInOrder(tokens, from, to, want) {
+  const left = { ...want };
+  const out = [];
+  for (const t of tokens) {
+    if (t.open || t.end < from || t.start > to) continue;
+    if (left[t.w] > 0) { out.push(t.w); left[t.w] -= 1; }
   }
-  return { best: out, gained };
+  for (const k of Object.keys(left)) for (let n = 0; n < left[k]; n++) out.push(k); // anything unplaced
+  return out;
+}
+
+export function createWordCounter(initialText = '') {
+  let text = initialText;
+  let cursor = initialText.length;
+  let bag = wordBag(text, cursor);
+  let credited = 0;
+  let run = [];          // words just deleted, in text order (for the undo rule)
+  let runIdx = 0;        // how far a retype has matched the run
+  let misses = 0;        // new words in a row that didn't match the run
+  let lastAction = null; // 'type' | 'delete'
+  let reopened = null;   // { w, start }: a counted word you backspaced into
+
+  function tokenAt(tokens, pos) {
+    return tokens.find((t) => t.start === pos) || null;
+  }
+  function creditNew(w) {
+    if (runIdx < run.length && run[runIdx] === w) { runIdx++; misses = 0; return 0; } // undo
+    if (runIdx === 0 || ++misses >= 2) { run = []; runIdx = 0; misses = 0; }          // new writing
+    return 1;
+  }
+
+  function update(next) {
+    const prev = text;
+    if (next === prev) return 0;
+    const r = editRange(prev, next);
+    const prevTokens = wordTokens(prev, cursor);
+    const nextTokens = wordTokens(next, r.nextEnd);
+    const nextBag = {};
+    for (const t of nextTokens) if (!t.open) nextBag[t.w] = (nextBag[t.w] || 0) + 1;
+    const addedBag = bagDiff(bag, nextBag);
+    const removedBag = bagDiff(nextBag, bag);
+    const shift = next.length - prev.length;
+    const curOpen = nextTokens.find((t) => t.open) || null;
+    let gained = 0;
+
+    if (reopened && r.start <= reopened.start && !(curOpen && curOpen.start === reopened.start)) {
+      reopened.start += shift; // an edit before it moved it
+    }
+
+    // A counted word became the word being typed again (you backspaced or
+    // typed into it): hold it as "reopened" — still counted, not deleted.
+    if (!reopened && curOpen) {
+      const was = tokenAt(prevTokens, curOpen.start);
+      if (was && !was.open && removedBag[was.w] > 0) {
+        reopened = { w: was.w, start: curOpen.start };
+        removedBag[was.w] -= 1;
+      }
+    }
+
+    // Leaving a reopened word: corrected (still there) or deleted (gone).
+    if (reopened && !(curOpen && curOpen.start === reopened.start)) {
+      const now = tokenAt(nextTokens, reopened.start);
+      if (now && !now.open && addedBag[now.w] > 0) {
+        addedBag[now.w] -= 1; // a fix of a counted word: no new credit (rule 5)
+      } else if (!now) {
+        if (lastAction === 'type') { run = []; runIdx = 0; misses = 0; }
+        run = [reopened.w].concat(run);
+        runIdx = 0;
+        lastAction = 'delete';
+      }
+      reopened = null;
+    }
+
+    // One edit that both removes and adds (autocorrect, replacing a
+    // selection): the replaced words are corrections, not new writing.
+    for (const k of Object.keys(removedBag)) {
+      for (const a of Object.keys(addedBag)) {
+        while (removedBag[k] > 0 && addedBag[a] > 0 && r.prevEnd > r.start && r.nextEnd > r.start) {
+          removedBag[k] -= 1; addedBag[a] -= 1;
+        }
+      }
+    }
+
+    // Deleted words: they stay counted, and remember them for the undo rule.
+    const removed = pickInOrder(prevTokens, r.start, r.prevEnd, removedBag);
+    if (removed.length) {
+      if (lastAction === 'type') { run = []; runIdx = 0; misses = 0; }
+      run = removed.concat(run);
+      runIdx = 0;
+      lastAction = 'delete';
+    }
+
+    // Newly finished words, in order.
+    const added = pickInOrder(nextTokens, r.start, r.nextEnd + 1, addedBag);
+    for (const w of added) gained += creditNew(w);
+    if (added.length) lastAction = 'type';
+
+    credited += gained;
+    text = next;
+    cursor = r.nextEnd;
+    bag = nextBag;
+    return gained;
+  }
+
+  // The word still being typed, if it would count (used at Finish).
+  function pending() {
+    const open = wordTokens(text, cursor).find((t) => t.open);
+    if (!open || reopened) return 0;
+    if (runIdx < run.length && run[runIdx] === open.w) return 0;
+    return 1;
+  }
+
+  return { update, pending, get credited() { return credited; } };
 }
 
 // More characters than this arriving in a single keystroke is treated as a
