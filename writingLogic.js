@@ -136,6 +136,72 @@ export function countWords(text) {
   return t ? t.split(/\s+/).length : 0;
 }
 
+// ---------------------------------------------------------------------------
+// Word credit for the typer. Every word you type counts — including words you
+// later delete or reword — but retyping a word you already got credit for
+// doesn't count again (so delete-and-retype can't pad the count).
+//
+// How: keep, per word, the most times it has appeared on the page this entry
+// ("best"). Credit is earned only when a word appears more times than that.
+//   "My made me some noodles." → delete → "The food was good."
+//   the, food, was, good are new → +4 (the deleted five stay counted).
+//   Fixing "My" → "My mom": only "mom" is new → +1.
+// The word you're in the middle of typing isn't credited until you finish it
+// (a space after it, or punctuation like "noodles."), so "n", "no", "noo"…
+// never count. It does show in the live count while you type it.
+// ---------------------------------------------------------------------------
+
+// Lower-case, without surrounding punctuation or quotes. (No \p{} classes, so
+// it runs on every JS engine.)
+export function normWord(w) {
+  return String(w || '')
+    .toLowerCase()
+    .replace(/^[^a-z0-9\u00c0-\u1fff\u2070-\uffff]+|[^a-z0-9\u00c0-\u1fff\u2070-\uffff]+$/g, '');
+}
+
+// Where an edit ended in the new text (≈ the cursor after typing).
+export function editPoint(prev, next) {
+  const max = Math.min(prev.length, next.length);
+  let i = 0;
+  while (i < max && prev[i] === next[i]) i++;
+  let j = 0;
+  while (j < max - i && prev[prev.length - 1 - j] === next[next.length - 1 - j]) j++;
+  return next.length - j;
+}
+
+// { word: times on the page }. skipAt: a text position; the word touching it
+// (the one being typed) is left out. Pass -1 to include every word.
+export function wordBag(text, skipAt = -1) {
+  const bag = {};
+  const re = /\S+/g;
+  let m;
+  while ((m = re.exec(text || ''))) {
+    const start = m.index;
+    const end = start + m[0].length;
+    // The word at the cursor is still being typed — unless it already ends in
+    // punctuation ("noodles."), which means it's finished.
+    if (skipAt >= start && skipAt <= end && !/[.!?,;:)"”’]$/.test(m[0])) continue;
+    const k = normWord(m[0]);
+    if (k) bag[k] = (bag[k] || 0) + 1;
+  }
+  return bag;
+}
+
+// Credit words in `bag` beyond what `best` has seen. Returns the new best and
+// how many words were gained. Pure: `best` isn't changed.
+export function creditWords(best, bag) {
+  const out = { ...best };
+  let gained = 0;
+  for (const k of Object.keys(bag)) {
+    const had = out[k] || 0;
+    if (bag[k] > had) {
+      gained += bag[k] - had;
+      out[k] = bag[k];
+    }
+  }
+  return { best: out, gained };
+}
+
 // More characters than this arriving in a single keystroke is treated as a
 // paste and rejected. A swiped or autocompleted word is well under this; a
 // pasted paragraph is well over it.

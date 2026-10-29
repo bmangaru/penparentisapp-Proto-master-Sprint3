@@ -31,7 +31,7 @@ import SessionDoneSheet from '../components/SessionDoneSheet';
 import LiveRings from '../components/LiveRings';
 import { colors, radius, space } from '../theme';
 import {
-  appRatingFor, countWords, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
+  appRatingFor, countWords, creditWords, editPoint, wordBag, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
 } from '../writingLogic';
 import { loadAll, saveSession, shareWriting, syncMedals } from '../writingStore';
 import { LEVEL_LABEL, nextLevel, nextPrompt, promptForDay } from '../prompts';
@@ -55,7 +55,11 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   const [seconds, setSeconds] = useState(0);
   const secondsRef = useRef(0);
   secondsRef.current = seconds;
-  const [effortWords, setEffortWords] = useState(0); // counts words you later deleted
+  // Words credited this session: every word typed counts, even if later
+  // deleted or reworded; retyping a word already credited doesn't (see
+  // creditWords in writingLogic). The word being typed is added live below.
+  const [effortWords, setEffortWords] = useState(0);
+  const bestWords = useRef({}); // per word: most times it's been on the page
   const [blockedPastes, setBlockedPastes] = useState(0);
   const [notice, setNotice] = useState('');
   const [paused, setPaused] = useState(false);
@@ -136,7 +140,6 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   const [feeling, setFeeling] = useState(null);
   const finishedRec = useRef(null);
 
-  const highestThisEntry = useRef(0);
   const textRef = useRef('');
   const latest = useRef({});
   const saved = useRef(false);
@@ -170,7 +173,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
       if (piece && piece.text.trim()) {
         const t = piece.text.replace(/\s*$/, ' ');
         textRef.current = t;
-        highestThisEntry.current = countWords(t);
+        bestWords.current = wordBag(t); // earlier writing is already counted
         continues.current = true;
         setText(t);
         setResumedAt(piece.lastAt);
@@ -227,17 +230,17 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     lastTyped.current = Date.now();
     lastActive.current = Date.now();
     if (paused) resumeClock(true); // typing always picks the clock back up
-    const words = countWords(t);
-    if (words > highestThisEntry.current) {
-      const delta = words - highestThisEntry.current;
-      highestThisEntry.current = words;
-      setEffortWords((w) => w + delta);
-    }
+    // Credit finished words that are new to this entry (not the one being typed).
+    const { best, gained } = creditWords(bestWords.current, wordBag(t, editPoint(prev, t)));
+    bestWords.current = best;
+    if (gained > 0) setEffortWords((w) => w + gained);
     // Deleting text does NOT reduce the count — effort already spent stays counted.
   }
 
+  // Live count = credited words + the word you're typing right now (if new).
+  const liveWords = effortWords + creditWords(bestWords.current, wordBag(text)).gained;
   const todayTotals = {
-    words: earlierToday.words + effortWords,
+    words: earlierToday.words + liveWords,
     seconds: earlierToday.seconds + seconds,
     count: earlierToday.count + 1, // this session counts toward the sessions ring
   };
@@ -265,7 +268,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
       ...session,
       endedAt: new Date().toISOString(),
       seconds,
-      words: effortWords,
+      words: liveWords,
       finalWords: countWords(textRef.current),
       text: textRef.current,
       blockedPastes,
@@ -295,7 +298,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     setSaveState('saved');
   }
   useEffect(() => {
-    if (!ready || effortWords <= 0 || saved.current) return undefined;
+    if (!ready || liveWords <= 0 || saved.current) return undefined;
     setSaveState('saving');
     clearTimeout(autosave.current);
     autosave.current = setTimeout(saveDraft, 2000);
@@ -325,7 +328,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
 
   async function finish() {
     // Opened the page and left without writing anything new: nothing to log.
-    if (effortWords === 0 && seconds < 60) {
+    if (liveWords === 0 && seconds < 60) {
       saved.current = true;
       navigation.goBack();
       return;
@@ -539,7 +542,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
 
       <SessionDoneSheet
         visible={sheet === 'done'}
-        words={effortWords}
+        words={finishedRec.current ? finishedRec.current.words : liveWords}
         seconds={seconds}
         dailyGoal={dailyGoal}
         todayTotals={todayTotals}
