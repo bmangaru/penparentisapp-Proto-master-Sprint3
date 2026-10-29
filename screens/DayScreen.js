@@ -3,20 +3,34 @@
 // today) "Keep writing", which reopens the writing page with this text in it.
 
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen, Button } from '../components/ui';
 import { colors, gradients, radius, space } from '../theme';
 import Face from '../components/Face';
-import { dayKey, daySummary, describeDailyGoal, isRestGoal, parseDayKey } from '../writingLogic';
+import { dayKey, daySummary, describeDailyGoal, isRestGoal, parseDayKey, pieceSegments } from '../writingLogic';
+import { LEVEL_LABEL, normalizeLevel } from '../prompts';
+import { LEVEL_STYLE } from '../components/usePromptLevel';
 import RingStats from '../components/RingStats';
 import { feelingLabel } from '../feelings';
 import { deleteDay, loadAll, shareDays } from '../writingStore';
 
 function timeOf(iso) {
   return iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+}
+
+// A prompt shown above its answer, in its level's colour.
+function PromptAbove({ prompt, level }) {
+  const l = normalizeLevel(level);
+  const ls = LEVEL_STYLE[l];
+  return (
+    <View style={[s.answerPrompt, { backgroundColor: ls.tint, borderLeftColor: ls.solid }]}>
+      <Text style={[s.answerKick, { color: ls.fg }]}>✦ {LEVEL_LABEL[l].toUpperCase()} PROMPT</Text>
+      <Text style={s.answerText}>“{prompt}”</Text>
+    </View>
+  );
 }
 
 export default function DayScreen({ navigation, route }) {
@@ -84,10 +98,25 @@ export default function DayScreen({ navigation, route }) {
                 {p.sessionIds.length > 1 ? `Started ${timeOf(p.firstAt)} · last saved ${timeOf(p.lastAt)}` : `Saved ${timeOf(p.lastAt)}`}
               </Text>
             </View>
-            {p.prompts?.map((pr) => (
-              <Text key={pr} style={s.piecePrompt}>✦ Prompt: “{pr}”</Text>
-            ))}
-            <Text style={s.pieceText} selectable>{p.text.trim() || 'Time only — no text saved'}</Text>
+            {p.answers ? (
+              // Newer saves: each prompt sits right above the writing that answers it.
+              pieceSegments(p.text, p.answers).length ? (
+                pieceSegments(p.text, p.answers).map((g, i) => (g.type === 'prompt' ? (
+                  <PromptAbove key={`p${i}`} prompt={g.prompt} level={g.level} />
+                ) : (
+                  <Text key={`t${i}`} style={[s.pieceText, s.pieceSeg]} selectable>{g.text}</Text>
+                )))
+              ) : (
+                <Text style={s.pieceText}>Time only — no text saved</Text>
+              )
+            ) : (
+              <>
+                {p.prompts?.map((pr) => (
+                  <Text key={pr} style={s.piecePrompt}>✦ Prompt: “{pr}”</Text>
+                ))}
+                <Text style={s.pieceText} selectable>{p.text.trim() || 'Time only — no text saved'}</Text>
+              </>
+            )}
             {p.feelings.length > 0 && (
               <View style={s.feelRow}>
                 <Text style={s.feelLabel}>How you felt:</Text>
@@ -146,6 +175,10 @@ const s = StyleSheet.create({
   feelChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DCE4F7', borderRadius: radius.pill, paddingVertical: 3, paddingLeft: 4, paddingRight: 9 },
   feelChipText: { fontSize: 12, fontWeight: '700', color: colors.royalDeep },
   piecePrompt: { fontSize: 13, lineHeight: 19, color: '#8A5E12', backgroundColor: '#FFF8E6', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  pieceSeg: { marginBottom: 10 },
+  answerPrompt: { borderLeftWidth: 3, borderTopRightRadius: 10, borderBottomRightRadius: 10, paddingVertical: 7, paddingHorizontal: 10, marginTop: 2, marginBottom: 8 },
+  answerKick: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
+  answerText: { fontSize: 14, lineHeight: 19, color: colors.ink, marginTop: 2, fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }) },
   pieceText: { fontSize: 16, lineHeight: 25, color: colors.ink },
   note: { fontSize: 12.5, lineHeight: 18, color: colors.muted },
   delete: { color: '#B3261E', fontSize: 13, fontWeight: '700', textAlign: 'center', paddingVertical: 14 },

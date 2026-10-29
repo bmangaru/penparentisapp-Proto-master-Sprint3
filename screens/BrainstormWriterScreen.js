@@ -31,7 +31,7 @@ import SessionDoneSheet from '../components/SessionDoneSheet';
 import LiveRings from '../components/LiveRings';
 import { colors, radius, space } from '../theme';
 import {
-  appRatingFor, countWords, createWordCounter, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
+  anchorAt, appRatingFor, cleanAnswers, countWords, createWordCounter, editRange, pruneAnswers, shiftAnswers, dayKey, dailyPct, goalForDay, looksLikePaste, sessionsOnDay, summarize, textToContinue,
 } from '../writingLogic';
 import { loadAll, saveSession, shareWriting, syncMedals } from '../writingStore';
 import { LEVEL_LABEL, nextLevel, nextPrompt, promptForDay } from '../prompts';
@@ -97,6 +97,15 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     if (Date.now() - lastTyped.current < BROWSE_GRACE_MS) lastActive.current = Date.now();
   }
   const [prompt, setPrompt] = useState(route?.params?.prompt || null);
+  // Prompts you've written under, pinned to where each answer starts:
+  // [{ prompt, level, at }]. Shown above their answers on the day page.
+  const [answers, setAnswers] = useState([]);
+  const answersRef = useRef([]);
+  function updateAnswers(list) {
+    answersRef.current = list;
+    setAnswers(list);
+  }
+  const promptLinked = !!prompt && answers.some((a) => a.prompt === prompt);
   // Simple / Thoughtful / Deep — shared with Brainstorm and Home.
   const [level, setLevel] = usePromptLevel();
   function pickLevel(l) {
@@ -181,6 +190,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
         continues.current = true;
         setText(t);
         setResumedAt(piece.lastAt);
+        if (piece.answers) updateAnswers(piece.answers); // earlier answers today stay pinned
       }
       setReady(true);
     });
@@ -235,6 +245,16 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     lastActive.current = Date.now();
     if (paused) resumeClock(true); // typing always picks the clock back up
     typingForward.current = t.length > prev.length;
+    // Keep earlier answers attached to their writing, and pin the prompt on
+    // screen to the first thing you type under it.
+    // (First drop any prompt whose answer you deleted and that's no longer on
+    // screen, so new writing doesn't land under it.)
+    let list = answersRef.current.length ? pruneAnswers(prev, answersRef.current, prompt) : answersRef.current;
+    list = shiftAnswers(list, prev, t);
+    if (prompt && t.length > prev.length && !list.some((a) => a.prompt === prompt)) {
+      list = list.concat({ prompt, level, at: anchorAt(t, editRange(prev, t).start) });
+    }
+    if (list !== answersRef.current) updateAnswers(list);
     // Credit finished words that are new to this entry (not the one being typed).
     const gained = wordCounter.current.update(t);
     if (gained > 0) setEffortWords((w) => w + gained);
@@ -288,6 +308,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
       feeling: null,
       continues: continues.current,
       prompt: prompt || null,
+      answers: cleanAnswers(textRef.current, answersRef.current),
       draft: false,
       ...extra,
     };
@@ -463,6 +484,9 @@ export default function BrainstormWriterScreen({ navigation, route }) {
             </Pressable>
           </View>
           <Text style={s.promptText}>“{prompt}”</Text>
+          <Text style={[s.promptLink, { color: ls.fg }]}>
+            {promptLinked ? '✓ Saved with your answer' : '✓ Saved with what you write next'}
+          </Text>
         </View>
       ) : ready && !text.trim() ? (
         <Pressable onPress={showPrompt} style={s.chip} accessibilityRole="button">
@@ -619,6 +643,7 @@ const s = StyleSheet.create({
   levelChipText: { fontSize: 12, fontWeight: '800' },
   promptAct: { minHeight: 30, paddingHorizontal: 9, borderRadius: radius.pill, justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.75)' },
   promptActText: { fontSize: 12.5, fontWeight: '800' },
+  promptLink: { fontSize: 11.5, fontWeight: '600', marginTop: 6, opacity: 0.85 },
   promptText: { fontSize: 16, lineHeight: 23, color: colors.ink, marginTop: 8, fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }) },
   menu: {
     position: 'absolute', right: space.lg, width: 250, backgroundColor: '#FFFFFF', borderRadius: radius.md, padding: 12,

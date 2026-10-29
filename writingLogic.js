@@ -575,6 +575,77 @@ export function describeDailyGoal(goal) {
 // the day reads as one document while each sitting is still its own session.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Prompt answers: each prompt you write under is pinned to where your answer
+// starts, so the day page can show it right above that writing.
+//   answers: [{ prompt, level, at }]  — `at` is a position in the text.
+// ---------------------------------------------------------------------------
+
+// Start of the word at `pos` (walk back to the previous whitespace).
+export function anchorAt(text, pos) {
+  let i = Math.max(0, Math.min(pos, text.length));
+  while (i > 0 && !/\s/.test(text[i - 1])) i--;
+  return i;
+}
+
+// Keep answers attached to their writing as text before them is edited.
+export function shiftAnswers(answers, prev, next) {
+  if (!answers || !answers.length || prev === next) return answers || [];
+  const r = editRange(prev, next);
+  const shift = next.length - prev.length;
+  return answers.map((a) => {
+    if (a.at < r.start) return a;                       // edit is after it
+    if (a.at === r.start && r.prevEnd === r.start) return a; // typing right where it starts goes into its answer
+    if (a.at < r.prevEnd) return { ...a, at: r.start }; // its start was deleted: pin to the edit
+    return { ...a, at: Math.max(0, a.at + shift) };     // edit is before it
+  });
+}
+
+// Sorted, one per prompt, and only prompts that still have writing after them.
+export function cleanAnswers(text, answers) {
+  const list = (answers || [])
+    .filter((a) => a && a.prompt)
+    .map((a) => ({ ...a, at: Math.max(0, Math.min(a.at || 0, text.length)) }))
+    .sort((a, b) => a.at - b.at);
+  const out = [];
+  list.forEach((a, i) => {
+    const end = i + 1 < list.length ? list[i + 1].at : text.length;
+    if (!text.slice(a.at, end).trim()) return;           // nothing written under it
+    if (out.some((o) => o.prompt === a.prompt)) return;  // already linked
+    out.push(a);
+  });
+  return out;
+}
+
+// While writing: drop a prompt whose answer you've deleted, unless it's the
+// prompt still on screen (you may be about to answer it again).
+export function pruneAnswers(text, answers, keepPrompt) {
+  const list = (answers || []).slice().sort((a, b) => a.at - b.at);
+  return list.filter((a, i) => {
+    if (a.prompt === keepPrompt) return true;
+    const end = i + 1 < list.length ? list[i + 1].at : text.length;
+    return !!text.slice(a.at, end).trim();
+  });
+}
+
+// Text split into plain writing and prompts, in reading order:
+//   [{ type: 'text', text }, { type: 'prompt', prompt, level }, …]
+export function pieceSegments(text, answers) {
+  const t = text || '';
+  const list = cleanAnswers(t, answers);
+  const segs = [];
+  let pos = 0;
+  for (const a of list) {
+    const before = t.slice(pos, a.at).trim();
+    if (before) segs.push({ type: 'text', text: before });
+    segs.push({ type: 'prompt', prompt: a.prompt, level: a.level || 'simple' });
+    pos = a.at;
+  }
+  const rest = t.slice(pos).trim();
+  if (rest) segs.push({ type: 'text', text: rest });
+  return segs;
+}
+
 export function dayPieces(sessions, key) {
   const list = sessionsOnDay(sessions, key)
     .slice()
@@ -590,6 +661,8 @@ export function dayPieces(sessions, key) {
       last.rating = finalRating(s) || last.rating;
       last.sessionIds.push(s.id);
       if (s.prompt && !last.prompts.includes(s.prompt)) last.prompts.push(s.prompt);
+      // Each save carries every answer in the piece so far (positions in its text).
+      if (Array.isArray(s.answers)) last.answers = s.answers;
       if (s.feeling) last.feelings.push({ at: s.endedAt || s.startedAt, feeling: s.feeling });
     } else {
       pieces.push({
@@ -600,7 +673,8 @@ export function dayPieces(sessions, key) {
         lastAt: s.endedAt || s.startedAt,
         rating: finalRating(s),
         sessionIds: [s.id],
-        prompts: s.prompt ? [s.prompt] : [], // writing prompts used for this piece
+        prompts: s.prompt ? [s.prompt] : [], // older saves: the one prompt shown
+        answers: Array.isArray(s.answers) ? s.answers : null, // newer saves: prompts pinned to answers
         feelings: s.feeling ? [{ at: s.endedAt || s.startedAt, feeling: s.feeling }] : [],
       });
     }
@@ -630,7 +704,12 @@ export function daySummary(sessions, dailyGoals, key, goals) {
     .sort((a, b) => String(b.endedAt || b.startedAt).localeCompare(String(a.endedAt || a.startedAt)));
   const feeling = felt.length ? felt[0].feeling : null;
   const rings = ringProgress(goal, sum);
-  return { key, goal, pct, rating, feeling, rings, pieces, preview: lastPiece?.text?.trim() || '', ...sum };
+  // Prompts answered that day, with their levels (for the little dots).
+  const answered = [];
+  for (const p of pieces) {
+    if (p.answers) for (const a of cleanAnswers(p.text || '', p.answers)) answered.push(a.level || 'simple');
+  }
+  return { key, goal, pct, rating, feeling, rings, pieces, answered, preview: lastPiece?.text?.trim() || '', ...sum };
 }
 
 // The Start writing button, which changes with the day.
@@ -673,7 +752,12 @@ export function dayShareText(summary) {
   const goalBit = summary.goal && !summary.goal.skipped ? ` · goal ${describeDailyGoal(summary.goal)}` : '';
   const ratingBit = summary.feeling ? ` · felt ${feelingLabel(summary.feeling).toLowerCase()}` : '';
   const head = `${date} · ${summary.words.toLocaleString()} words · ${timeText(summary.seconds)}${goalBit}${ratingBit}`;
-  const body = summary.pieces.map((p) => p.text.trim()).filter(Boolean).join('\n\n— — —\n\n');
+  const body = summary.pieces
+    .map((p) => (p.answers
+      ? pieceSegments(p.text, p.answers).map((g) => (g.type === 'prompt' ? `✦ ${g.prompt}` : g.text)).join('\n\n')
+      : p.text.trim()))
+    .filter(Boolean)
+    .join('\n\n— — —\n\n');
   return `${head}\n\n${body}`;
 }
 

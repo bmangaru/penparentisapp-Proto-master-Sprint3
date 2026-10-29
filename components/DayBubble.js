@@ -8,6 +8,8 @@ import { colors, lift, radius } from '../theme';
 import Face from './Face';
 import { parseDayKey, timeText } from '../writingLogic';
 import { feelingLabel } from '../feelings';
+import { LEVEL_STYLE } from './usePromptLevel';
+import { normalizeLevel } from '../prompts';
 
 // Progress-bar colour from goal status (gold once the goal is exceeded).
 const BAR = { exceeded: colors.karma, met: colors.royal, some: colors.royal, none: '#C8CEDE' };
@@ -62,6 +64,15 @@ export default function DayBubble({ day, isToday, onPress }) {
         </View>
       )}
 
+      {day.answered?.length ? (
+        <View style={s.answered}>
+          <View style={s.dots}>
+            {day.answered.map((l, i) => <View key={i} style={[s.dot, { backgroundColor: LEVEL_STYLE[normalizeLevel(l)].solid }]} />)}
+          </View>
+          <Text style={s.answeredText}>✦ {day.answered.length === 1 ? '1 prompt' : `${day.answered.length} prompts`} answered</Text>
+        </View>
+      ) : null}
+
       {day.preview ? (
         <Text style={s.preview} numberOfLines={2}>“{day.preview}”</Text>
       ) : (
@@ -74,6 +85,10 @@ export default function DayBubble({ day, isToday, onPress }) {
 }
 
 const s = StyleSheet.create({
+  answered: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#FFF6DF', borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: 10 },
+  dots: { flexDirection: 'row', gap: 3 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  answeredText: { fontSize: 11.5, fontWeight: '800', color: '#8A5E12' },
   card: {
     backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, gap: 8,
     borderWidth: 1, borderColor: colors.line, marginBottom: 12,
