@@ -60,6 +60,9 @@ export default function BrainstormWriterScreen({ navigation, route }) {
   // creditWords in writingLogic). The word being typed is added live below.
   const [effortWords, setEffortWords] = useState(0);
   const bestWords = useRef({}); // per word: most times it's been on the page
+  // Was the last edit adding text? Used at Finish: a last word you were still
+  // typing (no space after it yet) counts — but not a fragment left mid-delete.
+  const typingForward = useRef(false);
   const [blockedPastes, setBlockedPastes] = useState(0);
   const [notice, setNotice] = useState('');
   const [paused, setPaused] = useState(false);
@@ -230,6 +233,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     lastTyped.current = Date.now();
     lastActive.current = Date.now();
     if (paused) resumeClock(true); // typing always picks the clock back up
+    typingForward.current = t.length > prev.length;
     // Credit finished words that are new to this entry (not the one being typed).
     const { best, gained } = creditWords(bestWords.current, wordBag(t, editPoint(prev, t)));
     bestWords.current = best;
@@ -237,8 +241,14 @@ export default function BrainstormWriterScreen({ navigation, route }) {
     // Deleting text does NOT reduce the count — effort already spent stays counted.
   }
 
-  // Live count = credited words + the word you're typing right now (if new).
-  const liveWords = effortWords + creditWords(bestWords.current, wordBag(text)).gained;
+  // The live count only moves when a word is finished (space or punctuation),
+  // so it never blinks up or down while you type or delete letters.
+  const liveWords = effortWords;
+  // At Finish / save: plus the last word if you were still typing it.
+  function finalWords() {
+    const pending = typingForward.current ? creditWords(bestWords.current, wordBag(textRef.current)).gained : 0;
+    return effortWords + pending;
+  }
   const todayTotals = {
     words: earlierToday.words + liveWords,
     seconds: earlierToday.seconds + seconds,
@@ -268,7 +278,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
       ...session,
       endedAt: new Date().toISOString(),
       seconds,
-      words: liveWords,
+      words: finalWords(),
       finalWords: countWords(textRef.current),
       text: textRef.current,
       blockedPastes,
@@ -328,7 +338,7 @@ export default function BrainstormWriterScreen({ navigation, route }) {
 
   async function finish() {
     // Opened the page and left without writing anything new: nothing to log.
-    if (liveWords === 0 && seconds < 60) {
+    if (finalWords() === 0 && seconds < 60) {
       saved.current = true;
       navigation.goBack();
       return;
